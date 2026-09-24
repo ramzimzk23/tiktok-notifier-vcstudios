@@ -167,6 +167,9 @@ function renderDashboard(data) {
   const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
   renderGroupBanner(activeGroup);
 
+  // Render Daily Report Card for active group
+  renderDailyReportCard(activeGroup, runtime.accountCache);
+
   // Render Creators Grid for active group
   renderCreators(activeGroup, runtime.accountCache, state);
 
@@ -251,6 +254,180 @@ function renderGroupBanner(group) {
       warnCountEl.textContent = `${stats.invalidAccounts} Akun`;
     } else {
       warnPill.style.display = 'none';
+    }
+  }
+}
+
+// Daily Report State & Renderer
+let currentDailyReport = null;
+
+function renderDailyReportCard(group, cache = {}) {
+  const card = document.getElementById('daily-report-card');
+  if (!card) return;
+
+  if (!group || !group.accounts || group.accounts.length === 0) {
+    card.style.display = 'none';
+    currentDailyReport = null;
+    return;
+  }
+  card.style.display = 'block';
+
+  // Calculate WIB date start & end
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+  const startOfDayWIB = Math.floor(new Date(`${dateStr}T00:00:00+07:00`).getTime() / 1000);
+  const endOfDayWIB = startOfDayWIB + 86400;
+  const formattedDate = new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeZone: 'Asia/Jakarta' }).format(now);
+
+  const target = 14;
+  const accounts = group.accounts || [];
+  const uploaded = [];
+  const missing = [];
+  const doubles = [];
+
+  for (const rawAcc of accounts) {
+    const acc = rawAcc.toLowerCase();
+    const cached = cache[acc];
+    const videos = cached?.recentVideos || (cached?.latestVideo ? [cached.latestVideo] : []);
+
+    const todayVideos = videos.filter(
+      (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+    );
+
+    if (todayVideos.length > 0) {
+      const topVideo = todayVideos[0];
+      const videoUrl = topVideo.url || `https://www.tiktok.com/@${acc}/video/${topVideo.id}`;
+      uploaded.push({
+        account: acc,
+        videoUrl,
+        videoId: topVideo.id,
+        uploadCountToday: todayVideos.length,
+        todayVideos
+      });
+
+      if (todayVideos.length > 1) {
+        doubles.push({
+          account: acc,
+          count: todayVideos.length,
+          videos: todayVideos
+        });
+      }
+    } else {
+      missing.push(acc);
+    }
+  }
+
+  const uploadedCount = uploaded.length;
+  const missingCount = missing.length;
+  const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
+  const isCompleted = uploadedCount >= target;
+
+  // Build clean copyable text
+  const copyLines = [];
+  copyLines.push(`📊 DAILY REPORT CLIPPERS — ${group.name.toUpperCase()}`);
+  copyLines.push(`📅 Hari/Tanggal: ${formattedDate}`);
+  copyLines.push(`🎯 Target Kuota: ${target} Video (1 Akun = 1 Video)`);
+  copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Selesai (${percentage}%)`);
+  copyLines.push(`⚡ Status: ${isCompleted ? '✅ TUNTAS 100%' : `⚠️ BELUM TUNTAS (${missingCount} Akun Belum Upload)`}`);
+  copyLines.push('');
+  copyLines.push(`✅ SUDAH UPLOAD (${uploadedCount} AKUN):`);
+  if (uploaded.length === 0) {
+    copyLines.push('(Belum ada akun yang upload hari ini)');
+  } else {
+    uploaded.forEach((u, i) => {
+      copyLines.push(`${i + 1}. @${u.account} — ${u.videoUrl}`);
+    });
+  }
+
+  copyLines.push('');
+  copyLines.push(`❌ BELUM UPLOAD (${missingCount} AKUN):`);
+  if (missing.length === 0) {
+    copyLines.push('🎉 Semua akun sudah upload!');
+  } else {
+    missing.forEach((m, i) => {
+      copyLines.push(`${i + 1}. @${m}`);
+    });
+  }
+
+  if (doubles.length > 0) {
+    copyLines.push('');
+    copyLines.push(`⚠️ PERINGATAN DOUBLE UPLOAD (${doubles.length} AKUN):`);
+    doubles.forEach((d) => {
+      copyLines.push(`• @${d.account} (${d.count} video hari ini):`);
+      d.videos.forEach((v) => {
+        const u = v.url || `https://www.tiktok.com/@${d.account}/video/${v.id}`;
+        copyLines.push(`   - ${u}`);
+      });
+    });
+  }
+
+  const copyText = copyLines.join('\n');
+
+  currentDailyReport = {
+    groupId: group.id,
+    groupName: group.name,
+    dateStr,
+    formattedDate,
+    target,
+    uploadedCount,
+    missingCount,
+    percentage,
+    isCompleted,
+    uploaded,
+    missing,
+    doubles,
+    copyText
+  };
+
+  // Update DOM elements
+  const dateBadge = document.getElementById('report-date-badge');
+  const statusBadge = document.getElementById('report-status-badge');
+  const progressText = document.getElementById('report-progress-text');
+  const progressBar = document.getElementById('report-progress-bar');
+  const doubleBox = document.getElementById('report-double-upload-box');
+  const doubleList = document.getElementById('report-double-upload-list');
+  const incompleteBox = document.getElementById('report-incomplete-box');
+  const incompleteDesc = document.getElementById('report-incomplete-desc');
+
+  if (dateBadge) dateBadge.textContent = dateStr;
+  if (statusBadge) {
+    if (isCompleted) {
+      statusBadge.className = 'report-status-badge status-completed';
+      statusBadge.textContent = '✅ TUNTAS 100%';
+    } else {
+      statusBadge.className = 'report-status-badge status-incomplete';
+      statusBadge.textContent = `⚠️ BELUM TUNTAS (${missingCount} Belum)`;
+    }
+  }
+
+  if (progressText) {
+    progressText.textContent = `${uploadedCount} / ${target} Video (${percentage}%)`;
+  }
+  if (progressBar) {
+    progressBar.style.width = `${percentage}%`;
+  }
+
+  // Double upload box
+  if (doubleBox && doubleList) {
+    if (doubles.length > 0) {
+      doubleBox.style.display = 'flex';
+      doubleList.innerHTML = doubles
+        .map((d) => `<span class="double-tag-item">@${d.account} (${d.count} video)</span>`)
+        .join('');
+    } else {
+      doubleBox.style.display = 'none';
+    }
+  }
+
+  // Incomplete box
+  if (incompleteBox && incompleteDesc) {
+    if (!isCompleted && missingCount > 0) {
+      incompleteBox.style.display = 'flex';
+      const sampleMissing = missing.slice(0, 6).map((m) => `@${m}`).join(', ');
+      const moreMissing = missing.length > 6 ? ` dan ${missing.length - 6} lainnya` : '';
+      incompleteDesc.textContent = `${missingCount} akun belum upload hari ini: ${sampleMissing}${moreMissing}.`;
+    } else {
+      incompleteBox.style.display = 'none';
     }
   }
 }
@@ -1033,6 +1210,155 @@ if (resetCacheBtn) {
     if (alertEl) alertEl.style.display = 'none';
     showToast('Sesi browser & cache telah dibersihkan secara total.');
   });
+}
+
+// Clipboard Copy Helper with Cross-Browser Fallback
+async function copyTextToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (err) {
+    console.warn('Navigator clipboard error, falling back:', err);
+  }
+
+  try {
+    const tempTextarea = document.createElement('textarea');
+    tempTextarea.value = text;
+    tempTextarea.style.position = 'fixed';
+    tempTextarea.style.left = '-999999px';
+    tempTextarea.style.top = '-999999px';
+    document.body.appendChild(tempTextarea);
+    tempTextarea.focus();
+    tempTextarea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(tempTextarea);
+    return successful;
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    return false;
+  }
+}
+
+// Daily Report Actions: 1-Click Copy
+const copyReportBtn = document.getElementById('btn-copy-daily-report');
+if (copyReportBtn) {
+  copyReportBtn.addEventListener('click', async () => {
+    if (!currentDailyReport || !currentDailyReport.copyText) {
+      showToast('Belum ada data daily report untuk disalin.', true);
+      return;
+    }
+    const ok = await copyTextToClipboard(currentDailyReport.copyText);
+    if (ok) {
+      showToast('📋 Daily Report berhasil disalin ke clipboard! Siap ditempel.');
+    } else {
+      showToast('Gagal menyalin otomatis. Buka Detail untuk menyalin manual.', true);
+    }
+  });
+}
+
+// Daily Report Actions: Send to Discord Webhook
+const sendDiscordReportBtn = document.getElementById('btn-send-discord-report');
+if (sendDiscordReportBtn) {
+  sendDiscordReportBtn.addEventListener('click', async () => {
+    if (!activeGroupId) {
+      showToast('Pilih grup terlebih dahulu!', true);
+      return;
+    }
+
+    sendDiscordReportBtn.disabled = true;
+    const originalText = sendDiscordReportBtn.innerHTML;
+    sendDiscordReportBtn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Mengirim...`;
+
+    try {
+      const res = await authFetch(`/api/groups/${activeGroupId}/daily-report/send`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('🚀 Daily Report berhasil dikirim ke Discord Webhook (@everyone)!');
+      } else {
+        showToast(data.error || 'Gagal mengirim daily report ke Discord', true);
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, true);
+    } finally {
+      sendDiscordReportBtn.disabled = false;
+      sendDiscordReportBtn.innerHTML = originalText;
+    }
+  });
+}
+
+// Daily Report Actions: Push Incomplete Warning to Discord
+const warnDiscordReportBtn = document.getElementById('btn-warn-discord-report');
+if (warnDiscordReportBtn) {
+  warnDiscordReportBtn.addEventListener('click', async () => {
+    if (!activeGroupId) {
+      showToast('Pilih grup terlebih dahulu!', true);
+      return;
+    }
+
+    warnDiscordReportBtn.disabled = true;
+    const originalText = warnDiscordReportBtn.innerHTML;
+    warnDiscordReportBtn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Mengirim...`;
+
+    try {
+      const res = await authFetch(`/api/groups/${activeGroupId}/daily-report/warn-incomplete`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('⚠️ Peringatan target belum tuntas berhasil dikirim ke Discord (@everyone)!');
+      } else {
+        showToast(data.error || 'Gagal mengirim peringatan ke Discord', true);
+      }
+    } catch (err) {
+      showToast(`Error: ${err.message}`, true);
+    } finally {
+      warnDiscordReportBtn.disabled = false;
+      warnDiscordReportBtn.innerHTML = originalText;
+    }
+  });
+}
+
+// Daily Report Modal: View & Copy Text
+const viewReportBtn = document.getElementById('btn-view-daily-report');
+const viewReportModal = document.getElementById('modal-view-report');
+const previewTextarea = document.getElementById('report-preview-textarea');
+const closeViewReportBtn = document.getElementById('btn-close-view-report');
+const cancelViewReportBtn = document.getElementById('btn-cancel-view-report');
+const modalCopyReportBtn = document.getElementById('btn-modal-copy-report');
+
+if (viewReportBtn && viewReportModal && previewTextarea) {
+  viewReportBtn.addEventListener('click', () => {
+    if (!currentDailyReport || !currentDailyReport.copyText) {
+      showToast('Belum ada data daily report.', true);
+      return;
+    }
+    previewTextarea.value = currentDailyReport.copyText;
+    viewReportModal.classList.add('show');
+  });
+
+  const closeReportModal = () => viewReportModal.classList.remove('show');
+  if (closeViewReportBtn) closeViewReportBtn.addEventListener('click', closeReportModal);
+  if (cancelViewReportBtn) cancelViewReportBtn.addEventListener('click', closeReportModal);
+
+  if (modalCopyReportBtn) {
+    modalCopyReportBtn.addEventListener('click', async () => {
+      const ok = await copyTextToClipboard(previewTextarea.value);
+      if (ok) {
+        showToast('📋 Teks Daily Report berhasil disalin!');
+        closeReportModal();
+      } else {
+        previewTextarea.select();
+        document.execCommand('copy');
+        showToast('📋 Teks disalin!');
+        closeReportModal();
+      }
+    });
+  }
 }
 
 // Check Auth on Startup with Retry for Cold Starts

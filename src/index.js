@@ -1,9 +1,18 @@
 import { checkAccount } from './tracker.js';
-import { createWebServer, addLog, runtimeState } from './server.js';
+import { createWebServer, addLog, runtimeState, generateDailyReportData } from './server.js';
 import { getFullConfig, isUsingSupabase, readLocalCache, writeLocalCache } from './db.js';
-import { sendDiscordWarningNotification } from './notifier.js';
+import {
+  sendDiscordWarningNotification,
+  sendDiscordDoubleUploadWarning,
+  sendDiscordIncompleteWarning
+} from './notifier.js';
 
 const warnedNotFoundAccounts = new Set();
+const dailyAlertsTracker = {
+  currentDate: '',
+  doubleUploads: new Set(),
+  incompleteWarnings: new Set()
+};
 
 let isPolling = false;
 let nextPollTimer = null;
@@ -60,6 +69,16 @@ export async function runPoll(isManual = false) {
     let processedCount = 0;
     let cacheDirty = false;
 
+    // Check and reset daily alerts if a new day in WIB has arrived
+    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+    if (dailyAlertsTracker.currentDate !== nowWIB) {
+      dailyAlertsTracker.currentDate = nowWIB;
+      dailyAlertsTracker.doubleUploads.clear();
+      dailyAlertsTracker.incompleteWarnings.clear();
+    }
+    const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
+    const endOfDayWIB = startOfDayWIB + 86400;
+
     // Process accounts in parallel batches
     for (let i = 0; i < queue.length; i += BATCH_CONCURRENCY) {
       const batch = queue.slice(i, i + BATCH_CONCURRENCY);
@@ -86,6 +105,27 @@ export async function runPoll(isManual = false) {
             const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
             warnedNotFoundAccounts.delete(accKey);
             cacheDirty = true;
+
+            // Check double upload (uploaded > 1 video today in WIB) - Push warning only 1x
+            const todayVideos = (result.videos || []).filter(
+              (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+            );
+            if (todayVideos.length > 1) {
+              const doubleKey = `${item.groupId}:${item.account.toLowerCase()}:${nowWIB}`;
+              if (!dailyAlertsTracker.doubleUploads.has(doubleKey)) {
+                dailyAlertsTracker.doubleUploads.add(doubleKey);
+                addLog(`⚠️ PERINGATAN: Akun @${item.account} (${item.groupName}) melakukan DOUBLE UPLOAD (${todayVideos.length} video hari ini)!`, 'warn');
+                if (item.webhookUrl) {
+                  await sendDiscordDoubleUploadWarning(
+                    item.webhookUrl,
+                    item.groupName,
+                    item.account,
+                    todayVideos.length,
+                    todayVideos[0]
+                  );
+                }
+              }
+            }
           } else if (result && result.isNotFound) {
             // Track not found state so UI can show warning badge
             runtimeState.accountCache[item.account.toLowerCase()] = {
@@ -129,6 +169,32 @@ export async function runPoll(isManual = false) {
     // Persist cache to disk if updated
     if (cacheDirty) {
       await writeLocalCache(runtimeState.accountCache);
+    }
+
+    // Check if any group has incomplete quota (< 14 videos)
+    // Warning is pushed only 1x per day (in evening >= 18:00 WIB or when manual trigger)
+    const currentHourWIB = Number(
+      new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Jakarta' }).format(new Date())
+    );
+    if (currentHourWIB >= 18 || isManual) {
+      for (const group of groups) {
+        if (!group.webhookUrl || !group.accounts || group.accounts.length === 0) continue;
+        const incompleteKey = `${group.id}:${nowWIB}`;
+        if (!dailyAlertsTracker.incompleteWarnings.has(incompleteKey)) {
+          const report = generateDailyReportData(group, runtimeState.accountCache);
+          if (!report.isCompleted && report.missingCount > 0) {
+            dailyAlertsTracker.incompleteWarnings.add(incompleteKey);
+            addLog(`⚠️ PERINGATAN TARGET: Grup ${group.name} belum tuntas (${report.uploadedCount}/14). Peringatan 1x dikirim ke Discord.`, 'warn');
+            await sendDiscordIncompleteWarning(
+              group.webhookUrl,
+              group.name,
+              report.uploadedCount,
+              report.target,
+              report.missing
+            );
+          }
+        }
+      }
     }
 
     addLog(`Scan selesai (${processedCount}/${totalAccounts} akun). Siklus berikutnya dalam ${intervalSeconds} detik.`, 'success');

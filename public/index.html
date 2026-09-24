@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.6">
+  <link rel="stylesheet" href="style.css?v=1.0.9">
 </head>
 <body>
   <div class="glow-bg glow-1"></div>
@@ -242,6 +242,81 @@
           </div>
         </div>
 
+        <!-- DAILY REPORT & TARGET MONITOR CARD -->
+        <div class="daily-report-card" id="daily-report-card">
+          <div class="daily-report-header">
+            <div class="daily-report-title-area">
+              <div class="daily-badge-row">
+                <span class="report-tag">📊 DAILY REPORT</span>
+                <span class="report-date-tag" id="report-date-badge">Hari Ini</span>
+                <span class="report-status-badge" id="report-status-badge">Memuat...</span>
+              </div>
+              <h3 class="daily-report-heading">Target Kuota: <span id="report-target-text">14 Video / Hari</span></h3>
+              <p class="daily-report-sub">Aturan clippers: 1 akun = 1 video / hari (total target 14 akun). Peringatan terhighlight dikirim 1x jika belum tuntas atau terjadi double upload.</p>
+            </div>
+            <div class="daily-report-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-daily-report" title="Salin laporan ke clipboard">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Salin Daily Report</span>
+              </button>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-send-discord-report" title="Kirim daily report lengkap ke Discord Webhook">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                </svg>
+                <span>Kirim ke Discord</span>
+              </button>
+              <button type="button" class="btn btn-glass btn-sm" id="btn-warn-discord-report" title="Push peringatan target belum tuntas ke Discord">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span>Push Peringatan</span>
+              </button>
+              <button type="button" class="btn btn-glass btn-sm" id="btn-view-daily-report" title="Lihat rincian teks report">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>Detail</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar & Target Counters -->
+          <div class="report-progress-section">
+            <div class="report-progress-header">
+              <span class="report-progress-label">Progres Unggahan Hari Ini:</span>
+              <strong class="report-progress-value" id="report-progress-text">0 / 14 Video (0%)</strong>
+            </div>
+            <div class="report-progress-track">
+              <div class="report-progress-fill" id="report-progress-bar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <!-- Alert Double Upload Banner (Conditional) -->
+          <div class="report-alert-box alert-double-upload" id="report-double-upload-box" style="display: none;">
+            <div class="report-alert-icon">⚠️</div>
+            <div class="report-alert-content">
+              <strong style="color: #ff3366;">Peringatan: Double Upload Terdeteksi!</strong>
+              <p id="report-double-upload-desc">Akun berikut telah mengunggah lebih dari 1 video hari ini:</p>
+              <div class="double-upload-tags" id="report-double-upload-list"></div>
+            </div>
+          </div>
+
+          <!-- Incomplete Warning Banner (Conditional) -->
+          <div class="report-alert-box alert-incomplete" id="report-incomplete-box" style="display: none;">
+            <div class="report-alert-icon">⏳</div>
+            <div class="report-alert-content">
+              <strong style="color: #f59e0b;">Target Belum Tuntas:</strong>
+              <span id="report-incomplete-desc">Ada akun yang belum melakukan upload video hari ini.</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Add Creator to this Group -->
         <div class="add-creator-bar">
           <form id="form-add-account" class="add-account-form">
@@ -463,8 +538,37 @@
     </div>
   </div>
 
+  <!-- Modal: View & Copy Daily Report Text -->
+  <div class="modal-overlay" id="modal-view-report">
+    <div class="modal-card" style="max-width: 620px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">Laporan Harian</span>
+          <h3 class="modal-title">Daily Report Clippers</h3>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-view-report">&times;</button>
+      </div>
+      <div class="modal-body" style="margin-top: 14px;">
+        <p class="form-help" style="margin-bottom: 10px;">
+          Laporan ini berisi daftar akun yang sudah upload beserta link langsung ke video TikTok, serta daftar akun yang belum upload atau melakukan double upload.
+        </p>
+        <textarea id="report-preview-textarea" class="form-input" rows="15" readonly style="font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; white-space: pre; background: rgba(0,0,0,0.5);"></textarea>
+      </div>
+      <div class="modal-actions" style="margin-top: 18px;">
+        <button type="button" class="btn btn-glass" id="btn-cancel-view-report">Tutup</button>
+        <button type="button" class="btn btn-primary" id="btn-modal-copy-report">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Salin Semua Teks
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=1.0.8"></script>
+  <script src="app.js?v=1.0.9"></script>
 </body>
 </html>

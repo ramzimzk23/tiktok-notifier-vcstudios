@@ -3,7 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTikTokUserVideos } from './scraper.js';
-import { sendDiscordNotification } from './notifier.js';
+import {
+  sendDiscordNotification,
+  sendDiscordDoubleUploadWarning,
+  sendDiscordIncompleteWarning,
+  sendDiscordDailyReport
+} from './notifier.js';
 import {
   getFullConfig,
   saveSettings,
@@ -44,6 +49,142 @@ export function addLog(message, type = 'info') {
   if (runtimeState.logs.length > 60) {
     runtimeState.logs.pop();
   }
+}
+
+/**
+ * Get date boundaries in Asia/Jakarta (WIB)
+ */
+export function getJakartaDateInfo() {
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+  const startOfDayWIB = Math.floor(new Date(`${dateStr}T00:00:00+07:00`).getTime() / 1000);
+  const endOfDayWIB = startOfDayWIB + 86400;
+  const formattedDate = new Intl.DateTimeFormat('id-ID', {
+    dateStyle: 'full',
+    timeZone: 'Asia/Jakarta'
+  }).format(now);
+  return { dateStr, startOfDayWIB, endOfDayWIB, formattedDate };
+}
+
+/**
+ * Generate complete Daily Report data for a clipper group
+ */
+export function generateDailyReportData(group, accountCache = {}) {
+  const { dateStr, startOfDayWIB, endOfDayWIB, formattedDate } = getJakartaDateInfo();
+  const target = 14;
+  const accounts = group.accounts || [];
+
+  const uploaded = [];
+  const missing = [];
+  const doubles = [];
+
+  for (const rawAcc of accounts) {
+    const acc = rawAcc.toLowerCase();
+    const cached = accountCache[acc];
+    const videos = cached?.recentVideos || (cached?.latestVideo ? [cached.latestVideo] : []);
+
+    // Filter videos created today in WIB
+    const todayVideos = videos.filter(
+      (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+    );
+
+    if (todayVideos.length > 0) {
+      const topVideo = todayVideos[0];
+      const videoUrl = topVideo.url || `https://www.tiktok.com/@${acc}/video/${topVideo.id}`;
+      uploaded.push({
+        account: acc,
+        nickname: cached?.user?.nickname || acc,
+        videoUrl,
+        videoId: topVideo.id,
+        desc: topVideo.desc || '',
+        createTime: topVideo.createTime,
+        uploadCountToday: todayVideos.length,
+        todayVideos: todayVideos.map((v) => ({
+          id: v.id,
+          url: v.url || `https://www.tiktok.com/@${acc}/video/${v.id}`,
+          createTime: v.createTime,
+          desc: v.desc || ''
+        }))
+      });
+
+      if (todayVideos.length > 1) {
+        doubles.push({
+          account: acc,
+          count: todayVideos.length,
+          videos: todayVideos.map((v) => ({
+            id: v.id,
+            url: v.url || `https://www.tiktok.com/@${acc}/video/${v.id}`,
+            createTime: v.createTime
+          }))
+        });
+      }
+    } else {
+      missing.push(acc);
+    }
+  }
+
+  const uploadedCount = uploaded.length;
+  const missingCount = missing.length;
+  const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
+  const isCompleted = uploadedCount >= target;
+
+  // Format clean copyable text
+  const copyLines = [];
+  copyLines.push(`📊 DAILY REPORT CLIPPERS — ${group.name.toUpperCase()}`);
+  copyLines.push(`📅 Hari/Tanggal: ${formattedDate}`);
+  copyLines.push(`🎯 Target Kuota: ${target} Video (1 Akun = 1 Video)`);
+  copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Selesai (${percentage}%)`);
+  copyLines.push(`⚡ Status: ${isCompleted ? '✅ TUNTAS 100%' : `⚠️ BELUM TUNTAS (${missingCount} Akun Belum Upload)`}`);
+  copyLines.push('');
+  copyLines.push(`✅ SUDAH UPLOAD (${uploadedCount} AKUN):`);
+  if (uploaded.length === 0) {
+    copyLines.push('(Belum ada akun yang upload hari ini)');
+  } else {
+    uploaded.forEach((u, i) => {
+      copyLines.push(`${i + 1}. @${u.account} — ${u.videoUrl}`);
+    });
+  }
+
+  copyLines.push('');
+  copyLines.push(`❌ BELUM UPLOAD (${missingCount} AKUN):`);
+  if (missing.length === 0) {
+    copyLines.push('🎉 Semua akun sudah upload!');
+  } else {
+    missing.forEach((m, i) => {
+      copyLines.push(`${i + 1}. @${m}`);
+    });
+  }
+
+  if (doubles.length > 0) {
+    copyLines.push('');
+    copyLines.push(`⚠️ PERINGATAN DOUBLE UPLOAD (${doubles.length} AKUN):`);
+    doubles.forEach((d) => {
+      copyLines.push(`• @${d.account} (${d.count} video hari ini):`);
+      d.videos.forEach((v) => {
+        copyLines.push(`   - ${v.url}`);
+      });
+    });
+  }
+
+  const copyText = copyLines.join('\n');
+
+  return {
+    groupId: group.id,
+    groupName: group.name,
+    webhookUrl: group.webhookUrl || '',
+    date: dateStr,
+    formattedDate,
+    target,
+    totalAccounts: accounts.length,
+    uploadedCount,
+    missingCount,
+    percentage,
+    isCompleted,
+    uploaded,
+    missing,
+    doubles,
+    copyText
+  };
 }
 
 // In-Memory Login Rate Limiting (Brute-Force Protection)
@@ -532,6 +673,97 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         addLog(`Username TikTok @${oldUsername} berhasil dikoreksi menjadi @${rawNewUser} di grup "${group.name}"!`, 'success');
         sendJson({ success: true, oldUsername, newUsername: rawNewUser, user: probe.user });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
+      return;
+    }
+
+    // 8c. GET /api/groups/:id/daily-report
+    if (pathname.match(/^\/api\/groups\/([^/]+)\/daily-report$/) && req.method === 'GET') {
+      try {
+        const match = pathname.match(/^\/api\/groups\/([^/]+)\/daily-report$/);
+        const groupId = match[1];
+        const config = await getFullConfig();
+        const group = config.groups.find((g) => g.id === groupId);
+        if (!group) {
+          sendJson({ success: false, error: 'Grup tidak ditemukan' }, 404);
+          return;
+        }
+
+        const report = generateDailyReportData(group, runtimeState.accountCache);
+        sendJson({ success: true, report });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
+      return;
+    }
+
+    // 8d. POST /api/groups/:id/daily-report/send
+    if (pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/send$/) && req.method === 'POST') {
+      try {
+        const match = pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/send$/);
+        const groupId = match[1];
+        const config = await getFullConfig();
+        const group = config.groups.find((g) => g.id === groupId);
+        if (!group) {
+          sendJson({ success: false, error: 'Grup tidak ditemukan' }, 404);
+          return;
+        }
+
+        if (!group.webhookUrl) {
+          sendJson({ success: false, error: 'Discord webhook belum dikonfigurasi untuk grup ini' }, 400);
+          return;
+        }
+
+        const report = generateDailyReportData(group, runtimeState.accountCache);
+        const sent = await sendDiscordDailyReport(group.webhookUrl, group.name, report);
+        if (!sent) {
+          sendJson({ success: false, error: 'Gagal mengirim Daily Report ke Discord Webhook' }, 502);
+          return;
+        }
+
+        addLog(`📊 Daily Report grup ${group.name} berhasil dipush ke Discord Webhook!`, 'success');
+        sendJson({ success: true, message: 'Daily Report berhasil dikirim ke Discord' });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
+      return;
+    }
+
+    // 8e. POST /api/groups/:id/daily-report/warn-incomplete
+    if (pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/warn-incomplete$/) && req.method === 'POST') {
+      try {
+        const match = pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/warn-incomplete$/);
+        const groupId = match[1];
+        const config = await getFullConfig();
+        const group = config.groups.find((g) => g.id === groupId);
+        if (!group) {
+          sendJson({ success: false, error: 'Grup tidak ditemukan' }, 404);
+          return;
+        }
+
+        if (!group.webhookUrl) {
+          sendJson({ success: false, error: 'Discord webhook belum dikonfigurasi untuk grup ini' }, 400);
+          return;
+        }
+
+        const report = generateDailyReportData(group, runtimeState.accountCache);
+        const sent = await sendDiscordIncompleteWarning(
+          group.webhookUrl,
+          group.name,
+          report.uploadedCount,
+          report.target,
+          report.missing
+        );
+
+        if (!sent) {
+          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook' }, 502);
+          return;
+        }
+
+        addLog(`⚠️ Peringatan target belum tuntas (${report.uploadedCount}/${report.target}) grup ${group.name} dikirim ke Discord!`, 'warn');
+        sendJson({ success: true, message: 'Peringatan target belum tuntas berhasil dikirim ke Discord' });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }
