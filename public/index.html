@@ -365,31 +365,20 @@
 
         <hr style="border:none; border-top:1px solid var(--border-subtle); margin: 20px 0;">
 
-        <div class="modal-section-title" style="margin-bottom: 12px;">
-          <h4 style="font-size: 0.95rem; font-weight:700; color: #38bdf8; display:flex; align-items:center; gap:8px;">
-            <span>⚡</span> Koneksi Supabase Database
-          </h4>
-          <p style="font-size: 0.78rem; color: var(--text-muted); margin-top:2px;">
-            Sinkronkan data grup, akun, dan video ke cloud database Supabase secara permanen.
+        <div class="supabase-status-banner" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #10b981; font-size: 0.92rem;">
+              <span class="status-pulse" style="background: #10b981;"></span>
+              <span>Cloud Database Supabase: PERMANEN TERHUBUNG</span>
+            </div>
+            <span style="font-size: 0.72rem; color: #10b981; background: rgba(16, 185, 129, 0.2); padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">AKTIF 24/7</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.45;">
+            Seluruh data grup saluran, webhook Discord, dan akun TikTok Anda tersimpan 100% permanen di cloud database Supabase. Anda tidak perlu memasukkan URL atau Key lagi.
           </p>
-        </div>
-
-        <div class="form-group">
-          <label for="setting-supabase-url">Supabase Project URL</label>
-          <input type="url" id="setting-supabase-url" class="form-input" placeholder="https://xyzcompany.supabase.co">
-          <small class="form-help">Dapatkan di Project Settings > API di dashboard Supabase Anda.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="setting-supabase-key">Supabase Key (Anon / Service Role)</label>
-          <input type="password" id="setting-supabase-key" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
-          <small class="form-help">Pastikan sudah menjalankan script SQL di <code>supabase/schema.sql</code> terlebih dahulu.</small>
-        </div>
-
-        <div style="margin-bottom: 20px;">
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-connect-supabase" style="width:100%;">
-            ⚡ Hubungkan & Sinkronkan Data ke Supabase
-          </button>
+          <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 8px 12px; font-size: 0.76rem; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            URL Proyek: <span style="color: var(--tiktok-cyan); font-weight: 600;">https://nooymoegamxwwwdvzffa.supabase.co</span>
+          </div>
         </div>
 
         <div class="modal-actions">

@@ -13,8 +13,14 @@ const CACHE_FILE = path.resolve(__dirname, '../cache.json');
 let supabaseClient = null;
 let isSupabaseActive = false;
 
-// Initialize Supabase if credentials are provided
-export function initSupabase(url = process.env.SUPABASE_URL, key = process.env.SUPABASE_KEY) {
+export const DEFAULT_SUPABASE_URL = 'https://nooymoegamxwwwdvzffa.supabase.co';
+export const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vb3ltb2VnYW14d3d3ZHZ6ZmZhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDIzNzkyNywiZXhwIjoyMTA1ODEzOTI3fQ.JlmO7AyjaknDF1XIn_7z9esIYdtMVHIsIAP7DPCX-7I';
+
+// Initialize Supabase (Permanent default cloud database)
+export function initSupabase(
+  url = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+  key = process.env.SUPABASE_KEY || DEFAULT_SUPABASE_KEY
+) {
   if (url && key && url.startsWith('http')) {
     try {
       supabaseClient = createClient(url, key, {
@@ -33,7 +39,7 @@ export function initSupabase(url = process.env.SUPABASE_URL, key = process.env.S
   return false;
 }
 
-// Initial attempt
+// Initial attempt (Always connects to Supabase permanently)
 initSupabase();
 
 export function isUsingSupabase() {
@@ -49,17 +55,11 @@ async function readLocalConfig() {
   try {
     const raw = await fs.readFile(CONFIG_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
-    if (!parsed.groups && parsed.accounts) {
-      parsed.groups = [
-        {
-          id: 'group-default',
-          name: 'General Vibes',
-          webhookUrl: parsed.webhookUrl || '',
-          accounts: parsed.accounts || []
-        }
-      ];
-    }
-    return parsed;
+    return {
+      checkIntervalSeconds: parsed.checkIntervalSeconds || 120,
+      delayBetweenAccountsMs: parsed.delayBetweenAccountsMs || 2000,
+      groups: parsed.groups || []
+    };
   } catch {
     return {
       checkIntervalSeconds: 120,

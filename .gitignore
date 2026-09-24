@@ -1,5 +1,6 @@
 node_modules/
 state.json
 users.json
+cache.json
 .env
 .DS_Store

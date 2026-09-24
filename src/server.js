@@ -253,7 +253,11 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        const username = body.username || group.accounts[0] || 'varsatilevibes';
+        const username = body.username || group.accounts[0];
+        if (!username) {
+          sendJson({ success: false, error: 'Tambahkan minimal 1 akun ke grup ini untuk melakukan tes webhook' }, 400);
+          return;
+        }
         addLog(`Menjalankan tes webhook grup "${group.name}" untuk @${username}...`, 'info');
 
         const result = await getTikTokUserVideos(username);

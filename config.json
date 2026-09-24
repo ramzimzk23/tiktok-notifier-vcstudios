@@ -1,27 +1,5 @@
 {
   "checkIntervalSeconds": 120,
   "delayBetweenAccountsMs": 2000,
-  "groups": [
-    {
-      "id": "group-vibes",
-      "name": "Fany",
-      "webhookUrl": "https://discord.com/api/webhooks/1552615109443190795/k0CndPm_66lqZbuCAJcrn9qU9STdnuC7yE1hWj4P1b3Nx41_kPmGozxHi6sj0SZioUD9",
-      "accounts": []
-    },
-    {
-      "id": "group-1790242668672",
-      "name": "Nabila",
-      "webhookUrl": "https://discord.com/api/webhooks/1552614943478784002/PPCHwchwE3RJNjbIMvPVQbA3Nm3p_Nj_JaxE4mWNjT3uJDoHeBUny4eEQlSUCMyFripK",
-      "accounts": [
-        "bila67696",
-        "fitriiiiyyyaaa1",
-        "salsabilaptrqt",
-        "ilhamprstyo13",
-        "kevvv.mhndr",
-        "citradrmwn",
-        "keylaa7497",
-        "ardiansyhputra09"
-      ]
-    }
-  ]
+  "groups": []
 }

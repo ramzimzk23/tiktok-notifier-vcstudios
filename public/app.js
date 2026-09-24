@@ -675,7 +675,11 @@ document.getElementById('btn-delete-group').addEventListener('click', async () =
 document.getElementById('btn-test-group-webhook').addEventListener('click', () => {
   if (!activeGroupId) return;
   const group = currentStatus?.config?.groups?.find((g) => g.id === activeGroupId);
-  const firstAccount = group?.accounts?.[0] || 'varsatilevibes';
+  const firstAccount = group?.accounts?.[0];
+  if (!firstAccount) {
+    showToast('Tambahkan minimal 1 akun ke grup ini untuk mengetes webhook.', true);
+    return;
+  }
   testAccountWebhook(activeGroupId, firstAccount);
 });
 
@@ -717,42 +721,6 @@ document.getElementById('form-settings').addEventListener('submit', async (e) =>
     }
   } catch (err) {
     showToast(err.message, true);
-  }
-});
-
-// Connect Supabase Action
-document.getElementById('btn-connect-supabase').addEventListener('click', async () => {
-  const url = document.getElementById('setting-supabase-url').value.trim();
-  const key = document.getElementById('setting-supabase-key').value.trim();
-  const btn = document.getElementById('btn-connect-supabase');
-
-  if (!url || !key) {
-    showToast('Masukkan URL dan Key Supabase terlebih dahulu!', true);
-    return;
-  }
-
-  const original = btn.innerHTML;
-  btn.disabled = true;
-  btn.textContent = 'Menghubungkan & Migrasi...';
-
-  try {
-    const res = await authFetch('/api/supabase/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, key })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('⚡ Berhasil terhubung ke Supabase & data disinkronkan!');
-      fetchStatus();
-    } else {
-      showToast(`Gagal: ${data.error}`, true);
-    }
-  } catch (err) {
-    showToast(err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = original;
   }
 });
 
