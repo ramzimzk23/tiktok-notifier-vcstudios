@@ -31,22 +31,16 @@ CREATE TABLE IF NOT EXISTS public.app_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Tabel Pengguna / Akun Terdaftar
-CREATE TABLE IF NOT EXISTS public.app_users (
-    id TEXT PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    salt TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 4. Keamanan: Pendaftaran Ditutup Permanen (Hanya 1 Administrator Master)
+-- DROP TABLE IF EXISTS public.app_users CASCADE;
 
 -- Inisialisasi baris pengaturan default jika belum ada
 INSERT INTO public.app_settings (id, check_interval_seconds, delay_between_accounts_ms)
 VALUES ('global', 120, 2000)
 ON CONFLICT (id) DO NOTHING;
 
--- Nonaktifkan RLS agar service role & anon key bisa membaca dan menulis
+-- RLS Configuration untuk grup dan akun
 ALTER TABLE public.groups DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tracked_accounts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;
+

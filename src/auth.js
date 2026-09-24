@@ -1,72 +1,41 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
-import { getSupabaseClient, isUsingSupabase } from './db.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const USERS_FILE = path.resolve(__dirname, '../users.json');
-const SECRET = process.env.SESSION_SECRET || 'vcstudios-default-secret-salt-2026';
+// Sanitize secret key to prevent newline / quote injection
+const RAW_SECRET = process.env.SESSION_SECRET || 'vcstudios-super-secret-auth-key-2026';
+const SECRET = RAW_SECRET.replace(/["'\r\n]/g, '').trim();
 
+/**
+ * Retrieve sanitized administrator credentials
+ */
 export function getAdminCredentials() {
+  const rawUser = process.env.ADMIN_USERNAME || 'ramzimzk23@virzha.com';
+  const rawPass = process.env.ADMIN_PASSWORD || 'ksbenned123';
+
   return {
-    username: (process.env.ADMIN_USERNAME || 'ramzimzk23@virzha.com').trim().toLowerCase(),
-    password: process.env.ADMIN_PASSWORD || 'ksbenned123'
+    username: rawUser.replace(/["']/g, '').trim().toLowerCase(),
+    password: rawPass.replace(/["'\r\n]/g, '').trim()
   };
 }
 
 /**
- * Hash password with salt
- */
-export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
-  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-  return { hash, salt };
-}
-
-/**
- * Verify password against salt and hash
- */
-export function verifyPassword(password, salt, expectedHash) {
-  const { hash } = hashPassword(password, salt);
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(expectedHash));
-}
-
-/**
- * Load local users file
- */
-async function loadLocalUsers() {
-  try {
-    const raw = await fs.readFile(USERS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Save local users file
- */
-async function saveLocalUsers(users) {
-  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
-}
-
-/**
  * Generate HMAC token: base64(username:timestamp:hmac)
+ * Valid for 7 days
  */
 export function generateAuthToken(username) {
+  const cleanUser = username.trim().toLowerCase();
   const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-  const payload = `${username}:${expiresAt}`;
+  const payload = `${cleanUser}:${expiresAt}`;
   const hmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
   const token = Buffer.from(`${payload}:${hmac}`).toString('base64');
   return { token, expiresAt };
 }
 
 /**
- * Verify HMAC token
+ * Verify HMAC token with timing-safe check and admin identity confirmation
  */
 export function verifyAuthToken(token) {
-  if (!token) return false;
+  if (!token || typeof token !== 'string') return false;
   try {
     const raw = Buffer.from(token, 'base64').toString('utf-8');
     const parts = raw.split(':');
@@ -75,14 +44,24 @@ export function verifyAuthToken(token) {
     const [username, expiresAtStr, receivedHmac] = parts;
     const expiresAt = Number(expiresAtStr);
 
-    if (Date.now() > expiresAt) {
+    // Check expiration
+    if (!expiresAt || Date.now() > expiresAt) {
       return false; // Token expired
+    }
+
+    // STRICT: Only the designated Administrator can hold a valid active token
+    const admin = getAdminCredentials();
+    if (username.toLowerCase() !== admin.username) {
+      return false;
     }
 
     const payload = `${username}:${expiresAtStr}`;
     const expectedHmac = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
 
-    if (crypto.timingSafeEqual(Buffer.from(receivedHmac), Buffer.from(expectedHmac))) {
+    const receivedBuf = Buffer.from(receivedHmac);
+    const expectedBuf = Buffer.from(expectedHmac);
+
+    if (receivedBuf.length === expectedBuf.length && crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
       return { username, expiresAt };
     }
     return false;
@@ -92,119 +71,37 @@ export function verifyAuthToken(token) {
 }
 
 /**
- * Register a new user
- */
-export async function registerUser(username, password) {
-  const cleanUser = username.trim().toLowerCase();
-  if (!cleanUser || cleanUser.length < 3) {
-    throw new Error('Username / Email minimal 3 karakter.');
-  }
-  if (!password || password.length < 6) {
-    throw new Error('Password minimal 6 karakter.');
-  }
-
-  // Check admin conflict
-  const admin = getAdminCredentials();
-  if (cleanUser === admin.username) {
-    throw new Error('Username ini sudah terdaftar sebagai Administrator.');
-  }
-
-  const supabase = getSupabaseClient();
-  const usingSupabase = isUsingSupabase() && supabase;
-
-  // Check existing users in Supabase
-  if (usingSupabase) {
-    try {
-      const { data: existing } = await supabase
-        .from('app_users')
-        .select('username')
-        .eq('username', cleanUser)
-        .maybeSingle();
-
-      if (existing) {
-        throw new Error('Username / Email ini sudah terdaftar.');
-      }
-    } catch (err) {
-      if (!err.message.includes('already registered') && !err.message.includes('sudah terdaftar')) {
-        console.warn('[Auth] Supabase check user table failed, falling back to local:', err.message);
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  // Check local users
-  const localUsers = await loadLocalUsers();
-  if (localUsers.some((u) => u.username === cleanUser)) {
-    throw new Error('Username / Email ini sudah terdaftar.');
-  }
-
-  const { hash, salt } = hashPassword(password);
-  const newUser = {
-    id: 'user-' + Date.now(),
-    username: cleanUser,
-    password_hash: hash,
-    salt,
-    created_at: new Date().toISOString()
-  };
-
-  // Save to Supabase if available
-  if (usingSupabase) {
-    try {
-      await supabase.from('app_users').insert(newUser);
-    } catch (err) {
-      console.warn('[Auth] Gagal simpan user ke Supabase:', err.message);
-    }
-  }
-
-  // Save to local file
-  localUsers.push(newUser);
-  await saveLocalUsers(localUsers);
-
-  // Return logged in session
-  return generateAuthToken(cleanUser);
-}
-
-/**
- * Authenticate username and password
+ * Authenticate Administrator (Strict Single-Admin Access)
+ * Uses constant-time hashing comparison to prevent timing attacks.
  */
 export async function authenticateUser(username, password) {
-  const cleanUser = username.trim().toLowerCase();
+  if (!username || !password) return null;
 
-  // 1. Check admin credentials from .env
+  const cleanUser = String(username).replace(/["']/g, '').trim().toLowerCase();
+  const cleanPass = String(password).replace(/["'\r\n]/g, '').trim();
+
   const admin = getAdminCredentials();
-  if (cleanUser === admin.username && password === admin.password) {
+
+  // Check if username matches admin
+  if (cleanUser !== admin.username) {
+    return null;
+  }
+
+  // Timing-safe password check using sha256 digest comparison
+  const enteredHash = crypto.createHash('sha256').update(cleanPass).digest();
+  const expectedHash = crypto.createHash('sha256').update(admin.password).digest();
+
+  if (crypto.timingSafeEqual(enteredHash, expectedHash)) {
     return generateAuthToken(cleanUser);
   }
 
-  // 2. Check Supabase app_users table
-  const supabase = getSupabaseClient();
-  if (isUsingSupabase() && supabase) {
-    try {
-      const { data: userRow } = await supabase
-        .from('app_users')
-        .select('*')
-        .eq('username', cleanUser)
-        .maybeSingle();
-
-      if (userRow && userRow.password_hash && userRow.salt) {
-        if (verifyPassword(password, userRow.salt, userRow.password_hash)) {
-          return generateAuthToken(cleanUser);
-        }
-      }
-    } catch (err) {
-      console.warn('[Auth] Query app_users di Supabase gagal:', err.message);
-    }
-  }
-
-  // 3. Check local users.json
-  const localUsers = await loadLocalUsers();
-  const found = localUsers.find((u) => u.username === cleanUser);
-  if (found && found.password_hash && found.salt) {
-    if (verifyPassword(password, found.salt, found.password_hash)) {
-      return generateAuthToken(cleanUser);
-    }
-  }
-
   return null;
+}
+
+/**
+ * Register User - PERMANENTLY DISABLED
+ * Throws an explicit forbidden error if called.
+ */
+export async function registerUser() {
+  throw new Error('Pendaftaran akun baru telah ditutup secara permanen oleh Administrator.');
 }

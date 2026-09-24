@@ -941,7 +941,7 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
       alertEl.style.display = 'block';
     }
   } catch (err) {
-    alertEl.textContent = 'Gagal menghubungi server.';
+    alertEl.textContent = 'Gagal menghubungi server. Jika server sedang bangun dari mode hemat daya (cold start), silakan tunggu 10 detik lalu coba lagi.';
     alertEl.style.display = 'block';
   } finally {
     btn.disabled = false;
@@ -965,8 +965,23 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   }
 });
 
-// Check Auth on Startup
-async function initAuth() {
+// Reset Session Cache Button (Fixes any stuck/corrupted browser storage)
+const resetCacheBtn = document.getElementById('btn-reset-cache');
+if (resetCacheBtn) {
+  resetCacheBtn.addEventListener('click', () => {
+    clearToken();
+    localStorage.clear();
+    sessionStorage.clear();
+    document.getElementById('login-username').value = '';
+    document.getElementById('login-password').value = '';
+    const alertEl = document.getElementById('login-alert');
+    if (alertEl) alertEl.style.display = 'none';
+    showToast('Sesi browser & cache telah dibersihkan secara total.');
+  });
+}
+
+// Check Auth on Startup with Retry for Cold Starts
+async function initAuth(retries = 2) {
   const token = getToken();
   if (!token) {
     showLoginView();
@@ -985,8 +1000,14 @@ async function initAuth() {
       clearToken();
       showLoginView();
     }
-  } catch {
-    showLoginView();
+  } catch (err) {
+    // If server is cold-booting, wait and retry before abandoning session
+    if (retries > 0) {
+      console.log(`[Auth] Menghubungkan ke server (${retries} percobaan tersisa)...`);
+      setTimeout(() => initAuth(retries - 1), 2000);
+    } else {
+      showLoginView();
+    }
   }
 }
 

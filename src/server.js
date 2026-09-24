@@ -45,6 +45,49 @@ export function addLog(message, type = 'info') {
   }
 }
 
+// In-Memory Login Rate Limiting (Brute-Force Protection)
+const loginAttemptTracker = new Map();
+
+function checkLoginRateLimit(ip) {
+  const now = Date.now();
+  const record = loginAttemptTracker.get(ip);
+  if (!record) return { allowed: true };
+
+  if (record.lockedUntil && now < record.lockedUntil) {
+    const waitSec = Math.ceil((record.lockedUntil - now) / 1000);
+    const waitMin = Math.ceil(waitSec / 60);
+    return {
+      allowed: false,
+      error: `Akses diblokir sementara karena terlalu banyak percobaan login gagal dari IP Anda. Coba lagi dalam ${waitMin} menit (${waitSec} detik).`
+    };
+  }
+
+  if (now > record.resetAt) {
+    loginAttemptTracker.delete(ip);
+    return { allowed: true };
+  }
+
+  return { allowed: true };
+}
+
+function recordLoginAttempt(ip, success) {
+  const now = Date.now();
+  if (success) {
+    loginAttemptTracker.delete(ip);
+    return;
+  }
+
+  const record = loginAttemptTracker.get(ip) || { count: 0, resetAt: now + 15 * 60 * 1000, lockedUntil: 0 };
+  record.count += 1;
+
+  // Lock out IP after 5 failed attempts for 15 minutes
+  if (record.count >= 5) {
+    record.lockedUntil = now + 15 * 60 * 1000;
+  }
+
+  loginAttemptTracker.set(ip, record);
+}
+
 export function createWebServer(port = 3000, triggerPollCallback = null) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
@@ -53,6 +96,10 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
     const sendJson = (data, status = 200) => {
       res.writeHead(status, {
         'Content-Type': 'application/json',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
@@ -88,6 +135,14 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
     // 0. Public Auth Endpoints
     if (pathname === '/api/auth/login' && req.method === 'POST') {
+      const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
+      const rateLimit = checkLoginRateLimit(clientIp);
+      if (!rateLimit.allowed) {
+        addLog(`[Keamanan] Upaya login diblokir karena brute-force (IP: ${clientIp})`, 'error');
+        sendJson({ success: false, error: rateLimit.error }, 429);
+        return;
+      }
+
       try {
         const body = await parseBody();
         const username = (body.username || '').trim();
@@ -95,10 +150,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         const authResult = await authenticateUser(username, password);
         if (authResult) {
+          recordLoginAttempt(clientIp, true);
           addLog(`Pengguna "${username}" berhasil login ke dashboard`, 'success');
           sendJson({ success: true, token: authResult.token, username });
         } else {
-          addLog(`Gagal login: Kredensial tidak valid untuk user "${username}"`, 'warn');
+          recordLoginAttempt(clientIp, false);
+          addLog(`Gagal login: Kredensial tidak valid untuk user "${username}" (IP: ${clientIp})`, 'warn');
           sendJson({ success: false, error: 'Username atau password salah!' }, 401);
         }
       } catch (err) {
@@ -108,7 +165,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
     }
 
     if (pathname === '/api/auth/register' && req.method === 'POST') {
-      sendJson({ success: false, error: 'Pendaftaran akun baru telah dinonaktifkan oleh Administrator.' }, 403);
+      sendJson({ success: false, error: 'Pendaftaran akun baru telah dinonaktifkan secara permanen oleh Administrator.' }, 403);
       return;
     }
 
@@ -440,8 +497,11 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        // Save into .env for persistence
-        const envContent = `SUPABASE_URL=${url}\nSUPABASE_KEY=${key}\nPORT=3000\n`;
+        // Save into .env preserving admin credentials and session secret
+        const adminUser = process.env.ADMIN_USERNAME || 'ramzimzk23@virzha.com';
+        const adminPass = process.env.ADMIN_PASSWORD || 'ksbenned123';
+        const secret = process.env.SESSION_SECRET || 'vcstudios-super-secret-auth-key-2026';
+        const envContent = `SUPABASE_URL=${url}\nSUPABASE_KEY=${key}\nPORT=3000\nADMIN_USERNAME=${adminUser}\nADMIN_PASSWORD=${adminPass}\nSESSION_SECRET=${secret}\n`;
         await fs.writeFile(path.resolve(__dirname, '../.env'), envContent, 'utf-8');
 
         // Migrate local data into Supabase
@@ -482,7 +542,11 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         '.svg': 'image/svg+xml'
       };
 
-      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      res.writeHead(200, {
+        'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY'
+      });
       res.end(content);
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
