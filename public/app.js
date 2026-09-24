@@ -76,6 +76,22 @@ function showLoginView() {
 function showDashboardView() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard-view').style.display = 'block';
+
+  // 1. INSTANT ZERO-SECOND HYDRATION:
+  // Instantly render previously cached status from browser storage on refresh
+  try {
+    const cachedRaw = localStorage.getItem('vcstudios_last_status');
+    if (cachedRaw) {
+      const cachedData = JSON.parse(cachedRaw);
+      if (cachedData && cachedData.config) {
+        currentStatus = cachedData;
+        renderDashboard(cachedData);
+      }
+    }
+  } catch (err) {
+    console.warn('Gagal membaca cache status instan:', err);
+  }
+
   fetchStatus();
   if (!pollTimer) {
     pollTimer = setInterval(fetchStatus, 3000);
@@ -109,7 +125,20 @@ async function fetchStatus() {
     const res = await authFetch('/api/status');
     if (!res.ok) throw new Error('Gagal memuat status');
     currentStatus = await res.json();
+
+    // Persist latest status to browser localStorage for instant 0ms reload
+    try {
+      localStorage.setItem('vcstudios_last_status', JSON.stringify(currentStatus));
+    } catch {}
+
     renderDashboard(currentStatus);
+
+    // Auto-trigger initial scan in background if cache is empty & no scan is running
+    const hasCache = currentStatus.runtime?.accountCache && Object.keys(currentStatus.runtime.accountCache).length > 0;
+    const isScanning = currentStatus.runtime?.isScanning;
+    if (!hasCache && !isScanning) {
+      authFetch('/api/check-now', { method: 'POST' }).catch(() => {});
+    }
   } catch (err) {
     console.error('Error fetching status:', err);
   }
@@ -120,11 +149,14 @@ function renderDashboard(data) {
   const { config, runtime, state } = data;
   const groups = config.groups || [];
 
-  // Default active group: remember saved or choose group with accounts
+  // Default active group: prioritize group that actually has accounts
   const savedGroupId = localStorage.getItem('activeGroupId');
-  if (savedGroupId && groups.some((g) => g.id === savedGroupId)) {
+  const validSavedGroup = groups.find((g) => g.id === savedGroupId);
+
+  if (validSavedGroup && (validSavedGroup.accounts?.length || 0) > 0) {
     activeGroupId = savedGroupId;
-  } else if (!activeGroupId || !groups.some((g) => g.id === activeGroupId)) {
+  } else {
+    // Pick the first group that has accounts
     const groupWithAccounts = groups.find((g) => (g.accounts?.length || 0) > 0);
     activeGroupId = groupWithAccounts ? groupWithAccounts.id : (groups[0]?.id || null);
     if (activeGroupId) {

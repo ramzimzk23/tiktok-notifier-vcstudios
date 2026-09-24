@@ -103,6 +103,108 @@ export async function writeLocalCache(cache) {
   }
 }
 
+/**
+ * Load cached creator profiles and video list from Supabase cloud database
+ * Ensures instant data availability on server startup or page refresh!
+ */
+export async function loadAccountCacheFromDb() {
+  const cache = {};
+
+  if (isSupabaseActive && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('tracked_accounts')
+        .select('username, group_id, nickname, avatar_url, last_video_id, last_post_time, last_check_time');
+
+      if (!error && Array.isArray(data)) {
+        for (const row of data) {
+          if (!row.username) continue;
+          const u = row.username.toLowerCase();
+          let videos = [];
+          if (row.last_video_id) {
+            try {
+              if (row.last_video_id.startsWith('[') || row.last_video_id.startsWith('{')) {
+                const parsed = JSON.parse(row.last_video_id);
+                videos = Array.isArray(parsed) ? parsed : [parsed];
+              } else {
+                videos = [{
+                  id: row.last_video_id,
+                  createTime: row.last_post_time || 0,
+                  url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`
+                }];
+              }
+            } catch {
+              videos = [{
+                id: row.last_video_id,
+                createTime: row.last_post_time || 0,
+                url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`
+              }];
+            }
+          }
+
+          cache[u] = {
+            user: {
+              nickname: row.nickname || u,
+              uniqueId: u,
+              avatar: row.avatar_url || ''
+            },
+            groupId: row.group_id,
+            latestVideo: videos[0] || null,
+            recentVideos: videos,
+            lastUpdated: Number(row.last_check_time) || Date.now()
+          };
+        }
+      }
+    } catch (err) {
+      console.error('[DB] Gagal memuat cache dari Supabase:', err.message);
+    }
+  }
+
+  // Merge with local cache if present
+  const localCache = await readLocalCache();
+  return { ...localCache, ...cache };
+}
+
+/**
+ * Persist an account scan result to Supabase tracked_accounts table
+ */
+export async function saveAccountCacheToDb(username, cacheData) {
+  if (!username) return;
+  const cleanUser = username.replace(/^@/, '').toLowerCase();
+
+  // 1. Update local cache file
+  try {
+    const local = await readLocalCache();
+    local[cleanUser] = cacheData;
+    await writeLocalCache(local);
+  } catch {
+    // Ignore local error
+  }
+
+  // 2. Persist to Supabase cloud database
+  if (isSupabaseActive && supabaseClient) {
+    try {
+      const recentVideos = cacheData.recentVideos || (cacheData.latestVideo ? [cacheData.latestVideo] : []);
+      const latestVideo = recentVideos[0] || null;
+
+      const payload = {
+        nickname: cacheData.user?.nickname || cleanUser,
+        avatar_url: cacheData.user?.avatar || '',
+        last_video_id: recentVideos.length > 0 ? JSON.stringify(recentVideos) : null,
+        last_post_time: latestVideo?.createTime || null,
+        last_check_time: Date.now()
+      };
+
+      await supabaseClient
+        .from('tracked_accounts')
+        .update(payload)
+        .eq('username', cleanUser);
+    } catch (err) {
+      console.error(`[DB] Gagal menyimpan cache akun @${cleanUser} ke Supabase:`, err.message);
+    }
+  }
+}
+
 // --- Unified Database Interface ---
 
 /**

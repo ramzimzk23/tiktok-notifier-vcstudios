@@ -1,6 +1,13 @@
 import { checkAccount } from './tracker.js';
 import { createWebServer, addLog, runtimeState, generateDailyReportData } from './server.js';
-import { getFullConfig, isUsingSupabase, readLocalCache, writeLocalCache } from './db.js';
+import {
+  getFullConfig,
+  isUsingSupabase,
+  readLocalCache,
+  writeLocalCache,
+  loadAccountCacheFromDb,
+  saveAccountCacheToDb
+} from './db.js';
 import {
   sendDiscordWarningNotification,
   sendDiscordDoubleUploadWarning,
@@ -89,7 +96,7 @@ export async function runPoll(isManual = false) {
           const result = await checkAccount(item.account, item.webhookUrl, item.groupName, false);
 
           if (result && result.success && result.user) {
-            runtimeState.accountCache[item.account.toLowerCase()] = {
+            const cacheItem = {
               user: result.user,
               groupId: item.groupId,
               groupName: item.groupName,
@@ -102,6 +109,8 @@ export async function runPoll(isManual = false) {
               })),
               lastUpdated: Date.now()
             };
+            runtimeState.accountCache[item.account.toLowerCase()] = cacheItem;
+            saveAccountCacheToDb(item.account, cacheItem).catch(() => {});
             const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
             warnedNotFoundAccounts.delete(accKey);
             cacheDirty = true;
@@ -224,15 +233,15 @@ async function main() {
   const dbStatus = isUsingSupabase() ? '⚡ Supabase PostgreSQL' : '📁 File Lokal (config.json)';
   console.log(`🗄️ Database Mode  : ${dbStatus}`);
 
-  // Pre-load cached creator profiles so dashboard has instant data on visit
+  // Pre-load cached creator profiles and video list from Supabase cloud database
   try {
-    const cachedData = await readLocalCache();
+    const cachedData = await loadAccountCacheFromDb();
     if (cachedData && Object.keys(cachedData).length > 0) {
       runtimeState.accountCache = cachedData;
-      console.log(`⚡ Pre-loaded ${Object.keys(cachedData).length} akun dari cache lokal.`);
+      console.log(`⚡ Pre-loaded ${Object.keys(cachedData).length} akun dari database persistent.`);
     }
   } catch (err) {
-    console.error('Failed to load initial cache:', err.message);
+    console.error('Failed to load initial cache from DB:', err.message);
   }
 
   // Start Web Server immediately (non-blocking!)

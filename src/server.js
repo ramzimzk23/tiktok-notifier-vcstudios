@@ -21,7 +21,8 @@ import {
   getAccountStates,
   isUsingSupabase,
   initSupabase,
-  migrateLocalToSupabase
+  migrateLocalToSupabase,
+  loadAccountCacheFromDb
 } from './db.js';
 import { authenticateUser, registerUser, verifyAuthToken, getAdminCredentials } from './auth.js';
 
@@ -357,6 +358,17 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       try {
         const config = await getFullConfig();
         const state = await getAccountStates();
+
+        // If memory cache is empty (e.g. server just booted/restarted), hydrate immediately from DB
+        if (!runtimeState.accountCache || Object.keys(runtimeState.accountCache).length === 0) {
+          try {
+            const dbCache = await loadAccountCacheFromDb();
+            if (dbCache && Object.keys(dbCache).length > 0) {
+              runtimeState.accountCache = dbCache;
+            }
+          } catch {}
+        }
+
         sendJson({
           config,
           state,
