@@ -16,7 +16,10 @@ export async function sendDiscordNotification(webhookUrl, user, video, groupName
   const payload = {
     username: 'VCStudios',
     avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
-    content: `📢 **${user.nickname}** (@${user.uniqueId}) baru saja mengunggah video baru di TikTok!`,
+    content: `@everyone 📢 **${user.nickname}** (@${user.uniqueId}) baru saja mengunggah video baru di TikTok!`,
+    allowed_mentions: {
+      parse: ['everyone']
+    },
     embeds: [
       {
         author: {
@@ -91,6 +94,10 @@ export async function sendDiscordWarningNotification(webhookUrl, username, group
   const payload = {
     username: 'VCStudios Bot',
     avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
+    content: `@everyone ⚠️ **Peringatan TikTok:** Akun @${username} tidak ditemukan!`,
+    allowed_mentions: {
+      parse: ['everyone']
+    },
     embeds: [
       {
         title: `⚠️ Peringatan: Akun @${username} Tidak Ditemukan`,
