@@ -2,23 +2,48 @@ let currentStatus = null;
 let activeGroupId = null;
 let countdownSeconds = 0;
 let pollTimer = null;
+let currentUserRole = localStorage.getItem('vcstudios_role') || sessionStorage.getItem('vcstudios_role') || 'Admin';
+let currentUsername = localStorage.getItem('vcstudios_username') || sessionStorage.getItem('vcstudios_username') || '';
+let currentMainView = 'report';
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Auth State Management
 function getToken() {
   return localStorage.getItem('vcstudios_token') || sessionStorage.getItem('vcstudios_token');
 }
 
-function setToken(token, remember = true) {
+function setToken(token, remember = true, role = 'Admin', username = '') {
+  currentUserRole = role || 'Admin';
+  currentUsername = username || '';
   if (remember) {
     localStorage.setItem('vcstudios_token', token);
+    localStorage.setItem('vcstudios_role', currentUserRole);
+    localStorage.setItem('vcstudios_username', currentUsername);
   } else {
     sessionStorage.setItem('vcstudios_token', token);
+    sessionStorage.setItem('vcstudios_role', currentUserRole);
+    sessionStorage.setItem('vcstudios_username', currentUsername);
   }
 }
 
 function clearToken() {
+  currentUserRole = 'Admin';
+  currentUsername = '';
   localStorage.removeItem('vcstudios_token');
+  localStorage.removeItem('vcstudios_role');
+  localStorage.removeItem('vcstudios_username');
   sessionStorage.removeItem('vcstudios_token');
+  sessionStorage.removeItem('vcstudios_role');
+  sessionStorage.removeItem('vcstudios_username');
 }
 
 // Authenticated fetch wrapper
@@ -160,8 +185,9 @@ function renderDashboard(data) {
     }
   }
 
-  // Render Group Tabs
+  // Render Group Tabs for both views
   renderGroupTabs(groups);
+  renderReportGroupTabs(groups);
 
   // Render Active Group Banner
   const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
@@ -175,10 +201,13 @@ function renderDashboard(data) {
 
   // Render Logs
   renderLogs(runtime.logs);
+
+  // Update Role UI restrictions
+  updateRoleUI();
 }
 
 function updateCountdownDisplay() {
-  if (latestStatusData?.runtime?.isScanning) return;
+  if (currentStatus?.runtime?.isScanning) return;
   const mins = Math.floor(countdownSeconds / 60).toString().padStart(2, '0');
   const secs = (countdownSeconds % 60).toString().padStart(2, '0');
   const el = document.getElementById('countdown-val');
@@ -186,15 +215,92 @@ function updateCountdownDisplay() {
 }
 
 setInterval(() => {
-  if (countdownSeconds > 0 && !latestStatusData?.runtime?.isScanning) {
+  if (countdownSeconds > 0 && !currentStatus?.runtime?.isScanning) {
     countdownSeconds--;
     updateCountdownDisplay();
   }
 }, 1000);
 
-// Render Group Tabs
+// View Switching: Report vs Manage
+function switchMainView(viewName) {
+  const isViewer = currentUserRole === 'Viewer';
+  if (isViewer && viewName !== 'report') {
+    viewName = 'report';
+  }
+  currentMainView = viewName;
+
+  const btnReport = document.getElementById('tab-btn-report');
+  const btnManage = document.getElementById('tab-btn-manage');
+  const viewReport = document.getElementById('view-report-section');
+  const viewManage = document.getElementById('view-manage-section');
+
+  if (viewName === 'report') {
+    if (btnReport) btnReport.classList.add('active');
+    if (btnManage) btnManage.classList.remove('active');
+    if (viewReport) viewReport.style.display = 'block';
+    if (viewManage) viewManage.style.display = 'none';
+  } else {
+    if (btnReport) btnReport.classList.remove('active');
+    if (btnManage) btnManage.classList.add('active');
+    if (viewReport) viewReport.style.display = 'none';
+    if (viewManage) viewManage.style.display = 'block';
+  }
+}
+window.switchMainView = switchMainView;
+
+function updateRoleUI() {
+  const isViewer = currentUserRole === 'Viewer';
+  const roleBadge = document.getElementById('nav-role-badge');
+  const usernameEl = document.getElementById('nav-username');
+  const tabManage = document.getElementById('tab-btn-manage');
+  const btnCreateGroup = document.getElementById('btn-create-group');
+  const btnSettings = document.getElementById('btn-open-settings');
+  const btnManualCheck = document.getElementById('btn-manual-check');
+  const adminActions = document.getElementById('report-admin-actions');
+  const bannerActions = document.querySelector('.group-banner-actions');
+
+  if (usernameEl) {
+    usernameEl.textContent = currentUsername || (isViewer ? 'Viewer' : 'Admin');
+  }
+
+  if (roleBadge) {
+    if (isViewer) {
+      roleBadge.textContent = '👁️ Viewer';
+      roleBadge.className = 'group-badge';
+      roleBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+      roleBadge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      roleBadge.style.color = '#f59e0b';
+    } else {
+      roleBadge.textContent = '👑 Admin';
+      roleBadge.className = 'group-badge';
+      roleBadge.style.background = 'rgba(37, 244, 238, 0.15)';
+      roleBadge.style.borderColor = 'rgba(37, 244, 238, 0.4)';
+      roleBadge.style.color = 'var(--tiktok-cyan)';
+    }
+  }
+
+  if (isViewer) {
+    if (tabManage) tabManage.style.display = 'none';
+    if (btnCreateGroup) btnCreateGroup.style.display = 'none';
+    if (btnSettings) btnSettings.style.display = 'none';
+    if (btnManualCheck) btnManualCheck.style.display = 'none';
+    if (adminActions) adminActions.style.display = 'none';
+    if (bannerActions) bannerActions.style.display = 'none';
+    switchMainView('report');
+  } else {
+    if (tabManage) tabManage.style.display = 'inline-flex';
+    if (btnCreateGroup) btnCreateGroup.style.display = 'inline-flex';
+    if (btnSettings) btnSettings.style.display = 'inline-flex';
+    if (btnManualCheck) btnManualCheck.style.display = 'inline-flex';
+    if (adminActions) adminActions.style.display = 'flex';
+    if (bannerActions) bannerActions.style.display = 'flex';
+  }
+}
+
+// Render Group Tabs for Management View
 function renderGroupTabs(groups) {
   const container = document.getElementById('group-tabs-container');
+  if (!container) return;
   if (!groups || groups.length === 0) {
     container.innerHTML = '<span style="color:var(--text-muted)">Belum ada grup.</span>';
     return;
@@ -202,8 +308,25 @@ function renderGroupTabs(groups) {
 
   container.innerHTML = groups.map((g) => `
     <button type="button" class="group-tab ${g.id === activeGroupId ? 'active' : ''}" data-group-id="${g.id}" onclick="selectGroup('${g.id}')">
-      <span>${g.name}</span>
+      <span>${escapeHtml(g.name)}</span>
       <span class="group-tab-badge">${g.accounts?.length || 0}</span>
+    </button>
+  `).join('');
+}
+
+// Render Group Tabs for Daily Report View
+function renderReportGroupTabs(groups) {
+  const container = document.getElementById('report-group-tabs-container');
+  if (!container) return;
+  if (!groups || groups.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-muted)">Belum ada grup terdaftar.</span>';
+    return;
+  }
+
+  container.innerHTML = groups.map((g) => `
+    <button type="button" class="group-tab ${g.id === activeGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}')">
+      <span>${escapeHtml(g.name)}</span>
+      <span class="group-tab-badge">${g.accounts?.length || 0} Akun</span>
     </button>
   `).join('');
 }
@@ -267,6 +390,10 @@ function renderDailyReportCard(group, cache = {}) {
 
   if (!group || !group.accounts || group.accounts.length === 0) {
     card.style.display = 'none';
+    const tbody = document.getElementById('report-table-body');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Tidak ada akun pada grup ini.</td></tr>';
+    }
     currentDailyReport = null;
     return;
   }
@@ -279,7 +406,7 @@ function renderDailyReportCard(group, cache = {}) {
   const endOfDayWIB = startOfDayWIB + 86400;
   const formattedDate = new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeZone: 'Asia/Jakarta' }).format(now);
 
-  const target = 14;
+  const target = 14; // Kuota target: 1 video di 14 akun = SELESAI
   const accounts = group.accounts || [];
   const uploaded = [];
   const missing = [];
@@ -297,20 +424,19 @@ function renderDailyReportCard(group, cache = {}) {
     if (todayVideos.length > 0) {
       const topVideo = todayVideos[0];
       const videoUrl = topVideo.url || `https://www.tiktok.com/@${acc}/video/${topVideo.id}`;
-      uploaded.push({
+      const item = {
         account: acc,
         videoUrl,
         videoId: topVideo.id,
         uploadCountToday: todayVideos.length,
-        todayVideos
-      });
+        todayVideos,
+        topVideo,
+        createTime: topVideo.createTime
+      };
+      uploaded.push(item);
 
       if (todayVideos.length > 1) {
-        doubles.push({
-          account: acc,
-          count: todayVideos.length,
-          videos: todayVideos
-        });
+        doubles.push(item);
       }
     } else {
       missing.push(acc);
@@ -318,50 +444,10 @@ function renderDailyReportCard(group, cache = {}) {
   }
 
   const uploadedCount = uploaded.length;
-  const missingCount = missing.length;
-  const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
+  // ATURAN KUOTA: Jika group sudah upload 1 video di 14 akun = SELESAI
   const isCompleted = uploadedCount >= target;
-
-  // Build clean copyable text
-  const copyLines = [];
-  copyLines.push(`📊 DAILY REPORT CLIPPERS — ${group.name.toUpperCase()}`);
-  copyLines.push(`📅 Hari/Tanggal: ${formattedDate}`);
-  copyLines.push(`🎯 Target Kuota: ${target} Video (1 Akun = 1 Video)`);
-  copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Selesai (${percentage}%)`);
-  copyLines.push(`⚡ Status: ${isCompleted ? '✅ TUNTAS 100%' : `⚠️ BELUM TUNTAS (${missingCount} Akun Belum Upload)`}`);
-  copyLines.push('');
-  copyLines.push(`✅ SUDAH UPLOAD (${uploadedCount} AKUN):`);
-  if (uploaded.length === 0) {
-    copyLines.push('(Belum ada akun yang upload hari ini)');
-  } else {
-    uploaded.forEach((u, i) => {
-      copyLines.push(`${i + 1}. @${u.account} — ${u.videoUrl}`);
-    });
-  }
-
-  copyLines.push('');
-  copyLines.push(`❌ BELUM UPLOAD (${missingCount} AKUN):`);
-  if (missing.length === 0) {
-    copyLines.push('🎉 Semua akun sudah upload!');
-  } else {
-    missing.forEach((m, i) => {
-      copyLines.push(`${i + 1}. @${m}`);
-    });
-  }
-
-  if (doubles.length > 0) {
-    copyLines.push('');
-    copyLines.push(`⚠️ PERINGATAN DOUBLE UPLOAD (${doubles.length} AKUN):`);
-    doubles.forEach((d) => {
-      copyLines.push(`• @${d.account} (${d.count} video hari ini):`);
-      d.videos.forEach((v) => {
-        const u = v.url || `https://www.tiktok.com/@${d.account}/video/${v.id}`;
-        copyLines.push(`   - ${u}`);
-      });
-    });
-  }
-
-  const copyText = copyLines.join('\n');
+  const remainingNeeded = Math.max(0, target - uploadedCount);
+  const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
 
   currentDailyReport = {
     groupId: group.id,
@@ -370,13 +456,12 @@ function renderDailyReportCard(group, cache = {}) {
     formattedDate,
     target,
     uploadedCount,
-    missingCount,
+    remainingNeeded,
     percentage,
     isCompleted,
     uploaded,
     missing,
-    doubles,
-    copyText
+    doubles
   };
 
   // Update DOM elements
@@ -393,15 +478,15 @@ function renderDailyReportCard(group, cache = {}) {
   if (statusBadge) {
     if (isCompleted) {
       statusBadge.className = 'report-status-badge status-completed';
-      statusBadge.textContent = '✅ TUNTAS 100%';
+      statusBadge.textContent = `✅ SELESAI (${uploadedCount}/${target} Akun)`;
     } else {
       statusBadge.className = 'report-status-badge status-incomplete';
-      statusBadge.textContent = `⚠️ BELUM TUNTAS (${missingCount} Belum)`;
+      statusBadge.textContent = `⚠️ BELUM TUNTAS (${remainingNeeded} Akun Lagi)`;
     }
   }
 
   if (progressText) {
-    progressText.textContent = `${uploadedCount} / ${target} Video (${percentage}%)`;
+    progressText.textContent = `${uploadedCount} / ${target} Akun (${percentage}%)`;
   }
   if (progressBar) {
     progressBar.style.width = `${percentage}%`;
@@ -412,24 +497,164 @@ function renderDailyReportCard(group, cache = {}) {
     if (doubles.length > 0) {
       doubleBox.style.display = 'flex';
       doubleList.innerHTML = doubles
-        .map((d) => `<span class="double-tag-item">@${d.account} (${d.count} video)</span>`)
+        .map((d) => `<span class="double-tag-item">@${escapeHtml(d.account)} (${d.uploadCountToday} video hari ini)</span>`)
         .join('');
     } else {
       doubleBox.style.display = 'none';
     }
   }
 
-  // Incomplete box
+  // Incomplete warning box: HANYA jika target 14 belum selesai
   if (incompleteBox && incompleteDesc) {
-    if (!isCompleted && missingCount > 0) {
+    if (!isCompleted && remainingNeeded > 0) {
       incompleteBox.style.display = 'flex';
       const sampleMissing = missing.slice(0, 6).map((m) => `@${m}`).join(', ');
       const moreMissing = missing.length > 6 ? ` dan ${missing.length - 6} lainnya` : '';
-      incompleteDesc.textContent = `${missingCount} akun belum upload hari ini: ${sampleMissing}${moreMissing}.`;
+      incompleteDesc.textContent = `${missing.length} akun belum upload hari ini: ${sampleMissing}${moreMissing}. Masih butuh ${remainingNeeded} akun lagi untuk memenuhi kuota 14 akun.`;
     } else {
       incompleteBox.style.display = 'none';
     }
   }
+
+  // Render the protected report table
+  renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target);
+}
+
+function renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target) {
+  const tbody = document.getElementById('report-table-body');
+  const countBadge = document.getElementById('report-table-count-badge');
+  if (!tbody) return;
+
+  const totalAccounts = group.accounts?.length || 0;
+  if (countBadge) {
+    countBadge.textContent = `${uploaded.length}/${totalAccounts} Akun Upload (${isCompleted ? 'Target Selesai' : 'Belum Tuntas'})`;
+  }
+
+  const uploadedMap = new Map();
+  uploaded.forEach((u) => uploadedMap.set(u.account, u));
+
+  // Sort: uploaded first (doubles at top), then missing
+  const sortedAccounts = [...(group.accounts || [])].sort((a, b) => {
+    const aUp = uploadedMap.get(a.toLowerCase());
+    const bUp = uploadedMap.get(b.toLowerCase());
+    if (aUp && !bUp) return -1;
+    if (!aUp && bUp) return 1;
+    if (aUp && bUp) {
+      return (bUp.uploadCountToday || 0) - (aUp.uploadCountToday || 0);
+    }
+    return a.localeCompare(b);
+  });
+
+  if (sortedAccounts.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Tidak ada akun pada grup ini.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sortedAccounts.map((rawAcc, idx) => {
+    const acc = rawAcc.toLowerCase();
+    const upData = uploadedMap.get(acc);
+    const cached = cache[acc];
+    const nickname = cached?.nickname || `@${acc}`;
+    const avatar = cached?.avatar || '';
+
+    let statusPill = '';
+    let timeStr = '<span style="color:var(--text-muted)">-</span>';
+    let captionHtml = '<span style="color:var(--text-muted); font-style:italic;">Belum ada video hari ini</span>';
+    let actionsHtml = '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
+
+    if (upData) {
+      if (upData.uploadCountToday > 1) {
+        statusPill = `<span class="table-status-pill status-double">⚠️ Double (${upData.uploadCountToday} Video)</span>`;
+      } else {
+        statusPill = `<span class="table-status-pill status-done">✅ Selesai (1 Video)</span>`;
+      }
+
+      if (upData.createTime) {
+        const d = new Date(upData.createTime * 1000);
+        timeStr = new Intl.DateTimeFormat('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'Asia/Jakarta'
+        }).format(d) + ' WIB';
+      }
+
+      const descText = upData.topVideo?.desc || '(Tanpa caption)';
+      const shortDesc = descText.length > 55 ? descText.substring(0, 52) + '...' : descText;
+      captionHtml = `<span title="${escapeHtml(descText)}" style="color: #cbd5e1; font-size: 0.82rem;">${escapeHtml(shortDesc)}</span>`;
+
+      actionsHtml = `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <a href="${escapeHtml(upData.videoUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline" style="text-decoration:none;" title="Buka video di TikTok">
+            🔗 Buka
+          </a>
+          <button type="button" class="btn btn-xs btn-cyan" onclick="copyOnlyTikTokLink('${escapeHtml(upData.videoUrl)}', '${escapeHtml(acc)}')" title="Salin hanya tautan video TikTok ke clipboard">
+            📋 Salin Link
+          </button>
+        </div>
+      `;
+    } else {
+      statusPill = `<span class="table-status-pill status-pending">⏳ Belum Upload</span>`;
+    }
+
+    const avatarHtml = avatar
+      ? `<img src="${escapeHtml(avatar)}" alt="${escapeHtml(acc)}" class="clippers-avatar" onerror="this.style.display='none'">`
+      : `<div class="clippers-avatar-placeholder">${acc.charAt(0).toUpperCase()}</div>`;
+
+    return `
+      <tr>
+        <td style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">${idx + 1}</td>
+        <td>
+          <div class="clippers-cell">
+            ${avatarHtml}
+            <div>
+              <div class="clippers-handle">@${escapeHtml(acc)}</div>
+              <div class="clippers-name">${escapeHtml(nickname)}</div>
+            </div>
+          </div>
+        </td>
+        <td>${statusPill}</td>
+        <td style="font-size: 0.8rem; font-family: monospace;">${timeStr}</td>
+        <td>${captionHtml}</td>
+        <td>${actionsHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Dedicated copy function: ONLY copies the specific TikTok video URL
+async function copyOnlyTikTokLink(url, account) {
+  if (!url) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const temp = document.createElement('input');
+      temp.value = url;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+    }
+    showToast(`📋 Link video @${account} berhasil disalin!`);
+  } catch (err) {
+    showToast(`Gagal menyalin link: ${err.message}`, true);
+  }
+}
+window.copyOnlyTikTokLink = copyOnlyTikTokLink;
+
+// Setup copy protection for Daily Report page (Anti-tamper: user cannot copy whole report text)
+function setupReportCopyProtection() {
+  const protectedElements = document.querySelectorAll('.report-protected-page');
+  protectedElements.forEach((el) => {
+    el.addEventListener('copy', (e) => {
+      e.preventDefault();
+      showToast('🔒 Teks laporan diproteksi anti-edit. Hanya link video yang dapat disalin melalui tombol "Salin Link".', true);
+    });
+    el.addEventListener('cut', (e) => {
+      e.preventDefault();
+    });
+  });
 }
 
 function calculateGroupVideoStats(group, cache, state) {
@@ -1165,8 +1390,9 @@ document.getElementById('form-login').addEventListener('submit', async (e) => {
     const data = await res.json();
 
     if (data.success && data.token) {
-      setToken(data.token, remember);
-      showToast(`Selamat datang, ${data.username}!`);
+      setToken(data.token, remember, data.role || 'Admin', data.username || username);
+      showToast(`Selamat datang, ${data.username || username}!`);
+      updateRoleUI();
       showDashboardView();
     } else {
       alertEl.textContent = data.error || 'Username atau password salah!';
@@ -1323,43 +1549,8 @@ if (warnDiscordReportBtn) {
   });
 }
 
-// Daily Report Modal: View & Copy Text
-const viewReportBtn = document.getElementById('btn-view-daily-report');
-const viewReportModal = document.getElementById('modal-view-report');
-const previewTextarea = document.getElementById('report-preview-textarea');
-const closeViewReportBtn = document.getElementById('btn-close-view-report');
-const cancelViewReportBtn = document.getElementById('btn-cancel-view-report');
-const modalCopyReportBtn = document.getElementById('btn-modal-copy-report');
-
-if (viewReportBtn && viewReportModal && previewTextarea) {
-  viewReportBtn.addEventListener('click', () => {
-    if (!currentDailyReport || !currentDailyReport.copyText) {
-      showToast('Belum ada data daily report.', true);
-      return;
-    }
-    previewTextarea.value = currentDailyReport.copyText;
-    viewReportModal.classList.add('show');
-  });
-
-  const closeReportModal = () => viewReportModal.classList.remove('show');
-  if (closeViewReportBtn) closeViewReportBtn.addEventListener('click', closeReportModal);
-  if (cancelViewReportBtn) cancelViewReportBtn.addEventListener('click', closeReportModal);
-
-  if (modalCopyReportBtn) {
-    modalCopyReportBtn.addEventListener('click', async () => {
-      const ok = await copyTextToClipboard(previewTextarea.value);
-      if (ok) {
-        showToast('📋 Teks Daily Report berhasil disalin!');
-        closeReportModal();
-      } else {
-        previewTextarea.select();
-        document.execCommand('copy');
-        showToast('📋 Teks disalin!');
-        closeReportModal();
-      }
-    });
-  }
-}
+// Initialize Daily Report Copy Protection on DOM
+setupReportCopyProtection();
 
 // Check Auth on Startup with Retry for Cold Starts
 async function initAuth(retries = 2) {
@@ -1376,6 +1567,9 @@ async function initAuth(retries = 2) {
     });
     const data = await res.json();
     if (data.valid) {
+      currentUserRole = data.role || localStorage.getItem('vcstudios_role') || 'Admin';
+      currentUsername = data.username || localStorage.getItem('vcstudios_username') || '';
+      updateRoleUI();
       showDashboardView();
     } else {
       clearToken();

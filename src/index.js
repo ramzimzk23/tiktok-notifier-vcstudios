@@ -182,9 +182,9 @@ export async function runPoll(isManual = false) {
         const incompleteKey = `${group.id}:${nowWIB}`;
         if (!dailyAlertsTracker.incompleteWarnings.has(incompleteKey)) {
           const report = generateDailyReportData(group, runtimeState.accountCache);
-          if (!report.isCompleted && report.missingCount > 0) {
+          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
             dailyAlertsTracker.incompleteWarnings.add(incompleteKey);
-            addLog(`⚠️ PERINGATAN TARGET: Grup ${group.name} belum tuntas (${report.uploadedCount}/14). Peringatan 1x dikirim ke Discord.`, 'warn');
+            addLog(`⚠️ PERINGATAN TARGET: Grup ${group.name} belum selesai (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
             await sendDiscordIncompleteWarning(
               group.webhookUrl,
               group.name,

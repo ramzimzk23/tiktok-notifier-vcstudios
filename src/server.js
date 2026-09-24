@@ -123,18 +123,18 @@ export function generateDailyReportData(group, accountCache = {}) {
     }
   }
 
-  const uploadedCount = uploaded.length;
-  const missingCount = missing.length;
+  const uploadedCount = uploaded.length; // Number of unique accounts in group that uploaded today
+  const isCompleted = uploadedCount >= target; // 14 accounts each uploading 1 video = SELESAI
+  const remainingNeeded = Math.max(0, target - uploadedCount);
   const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
-  const isCompleted = uploadedCount >= target;
 
-  // Format clean copyable text
+  // Format clean text
   const copyLines = [];
   copyLines.push(`📊 DAILY REPORT CLIPPERS — ${group.name.toUpperCase()}`);
   copyLines.push(`📅 Hari/Tanggal: ${formattedDate}`);
-  copyLines.push(`🎯 Target Kuota: ${target} Video (1 Akun = 1 Video)`);
-  copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Selesai (${percentage}%)`);
-  copyLines.push(`⚡ Status: ${isCompleted ? '✅ TUNTAS 100%' : `⚠️ BELUM TUNTAS (${missingCount} Akun Belum Upload)`}`);
+  copyLines.push(`🎯 Target Kuota: 1 video di ${target} akun = Selesai`);
+  copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Akun (${percentage}%)`);
+  copyLines.push(`⚡ Status: ${isCompleted ? '✅ SELESAI (Target 14 Akun Tuntas)' : `⚠️ BELUM SELESAI (Kurang ${remainingNeeded} Akun Lagi)`}`);
   copyLines.push('');
   copyLines.push(`✅ SUDAH UPLOAD (${uploadedCount} AKUN):`);
   if (uploaded.length === 0) {
@@ -146,10 +146,10 @@ export function generateDailyReportData(group, accountCache = {}) {
   }
 
   copyLines.push('');
-  copyLines.push(`❌ BELUM UPLOAD (${missingCount} AKUN):`);
-  if (missing.length === 0) {
-    copyLines.push('🎉 Semua akun sudah upload!');
+  if (isCompleted) {
+    copyLines.push(`🎉 Target ${target} akun telah terpenuhi (Selesai).`);
   } else {
+    copyLines.push(`❌ BELUM UPLOAD (Kurang ${remainingNeeded} Akun Lagi Menuju Target):`);
     missing.forEach((m, i) => {
       copyLines.push(`${i + 1}. @${m}`);
     });
@@ -177,7 +177,8 @@ export function generateDailyReportData(group, accountCache = {}) {
     target,
     totalAccounts: accounts.length,
     uploadedCount,
-    missingCount,
+    remainingNeeded,
+    missingCount: isCompleted ? 0 : remainingNeeded,
     percentage,
     isCompleted,
     uploaded,
@@ -293,8 +294,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         const authResult = await authenticateUser(username, password);
         if (authResult) {
           recordLoginAttempt(clientIp, true);
-          addLog(`Pengguna "${username}" berhasil login ke dashboard`, 'success');
-          sendJson({ success: true, token: authResult.token, username });
+          addLog(`Pengguna "${username}" (Role: ${authResult.role}) berhasil login ke sistem`, 'success');
+          sendJson({ success: true, token: authResult.token, username: authResult.username, role: authResult.role });
         } else {
           recordLoginAttempt(clientIp, false);
           addLog(`Gagal login: Kredensial tidak valid untuk user "${username}" (IP: ${clientIp})`, 'warn');
@@ -315,7 +316,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       const authHeader = req.headers['authorization'] || '';
       const token = authHeader.replace(/^Bearer\s+/i, '');
       const valid = verifyAuthToken(token);
-      sendJson({ valid: !!valid, user: valid ? valid.username : null });
+      sendJson({ valid: !!valid, user: valid ? valid.username : null, role: valid ? valid.role : null });
       return;
     }
 
@@ -337,6 +338,16 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       const verified = verifyAuthToken(token);
       if (!verified) {
         sendJson({ error: 'Unauthorized', requireLogin: true }, 401);
+        return;
+      }
+      req.user = verified;
+
+      // Enforce Read-Only for Viewer role (can only perform GET requests)
+      if (verified.role === 'Viewer' && req.method !== 'GET') {
+        sendJson({
+          success: false,
+          error: 'Akses Ditolak: Akun Anda memiliki role Viewer (Hanya Baca) dan tidak memiliki izin untuk mengubah data.'
+        }, 403);
         return;
       }
     }

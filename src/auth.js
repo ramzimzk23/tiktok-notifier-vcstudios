@@ -6,7 +6,7 @@ const RAW_SECRET = process.env.SESSION_SECRET || 'vcstudios-super-secret-auth-ke
 const SECRET = RAW_SECRET.replace(/["'\r\n]/g, '').trim();
 
 /**
- * Authorized whitelist accounts (Strict 3 accounts only)
+ * Authorized whitelist accounts
  */
 export const AUTHORIZED_ACCOUNTS = [
   {
@@ -17,12 +17,17 @@ export const AUTHORIZED_ACCOUNTS = [
   {
     username: 'itsmefahirawork@gmail.com',
     password: 'Fahira$123',
-    role: 'Member'
+    role: 'Administrator'
   },
   {
     username: 'vcreativeclippers@gmail.com',
     password: 'Fahira$123',
-    role: 'Member'
+    role: 'Administrator'
+  },
+  {
+    username: 'clippers@clippers.com',
+    password: 'akses2727',
+    role: 'Viewer'
   }
 ];
 
@@ -65,11 +70,11 @@ export function verifyAuthToken(token) {
       return false; // Token expired
     }
 
-    // STRICT: Only one of the 3 authorized accounts can hold a valid active token
-    const isAuthorized = AUTHORIZED_ACCOUNTS.some(
+    // STRICT: Only whitelisted accounts can hold a valid active token
+    const targetUser = AUTHORIZED_ACCOUNTS.find(
       (acc) => acc.username === username.toLowerCase()
     );
-    if (!isAuthorized) {
+    if (!targetUser) {
       return false;
     }
 
@@ -80,7 +85,7 @@ export function verifyAuthToken(token) {
     const expectedBuf = Buffer.from(expectedHmac);
 
     if (receivedBuf.length === expectedBuf.length && crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
-      return { username, expiresAt };
+      return { username, expiresAt, role: targetUser.role };
     }
     return false;
   } catch {
@@ -89,7 +94,7 @@ export function verifyAuthToken(token) {
 }
 
 /**
- * Authenticate User (Strictly restricted to the 3 authorized accounts)
+ * Authenticate User (Strictly restricted to authorized accounts)
  * Uses constant-time hashing comparison to prevent timing attacks.
  */
 export async function authenticateUser(username, password) {
@@ -98,7 +103,7 @@ export async function authenticateUser(username, password) {
   const cleanUser = String(username).replace(/["']/g, '').trim().toLowerCase();
   const cleanPass = String(password).replace(/["'\r\n]/g, '').trim();
 
-  // Find user in whitelist of 3 accounts
+  // Find user in whitelist
   const targetUser = AUTHORIZED_ACCOUNTS.find(
     (acc) => acc.username === cleanUser
   );
@@ -112,7 +117,8 @@ export async function authenticateUser(username, password) {
   const expectedHash = crypto.createHash('sha256').update(targetUser.password).digest();
 
   if (crypto.timingSafeEqual(enteredHash, expectedHash)) {
-    return generateAuthToken(cleanUser);
+    const tokenData = generateAuthToken(cleanUser);
+    return { ...tokenData, username: cleanUser, role: targetUser.role };
   }
 
   return null;
