@@ -129,6 +129,17 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       return;
     }
 
+    // Public Health Check Endpoint (For UptimeRobot / Keep-Alive)
+    if ((pathname === '/health' || pathname === '/api/health') && req.method === 'GET') {
+      sendJson({
+        status: 'healthy',
+        bot: 'VCStudios TikTok Notifier',
+        uptimeSeconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
     // Auth Middleware for all other /api routes
     if (pathname.startsWith('/api/')) {
       const authHeader = req.headers['authorization'] || '';
