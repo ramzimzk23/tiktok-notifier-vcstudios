@@ -10,6 +10,7 @@ import {
   upsertGroup,
   removeGroup,
   addAccountToGroup,
+  addAccountsBatchToGroup,
   removeAccountFromGroup,
   getAccountStates,
   isUsingSupabase,
@@ -353,6 +354,35 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         addLog(`Akun @${username} berhasil ditambahkan ke grup "${group.name}"!`, 'success');
         sendJson({ success: true, user: probe.user, group });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
+      return;
+    }
+
+    // 7b. POST /api/groups/:id/accounts/batch (Batch add accounts to group)
+    if (pathname.match(/^\/api\/groups\/([^/]+)\/accounts\/batch$/) && req.method === 'POST') {
+      try {
+        const match = pathname.match(/^\/api\/groups\/([^/]+)\/accounts\/batch$/);
+        const groupId = match[1];
+        const body = await parseBody();
+
+        let rawUsernames = [];
+        if (Array.isArray(body.usernames)) {
+          rawUsernames = body.usernames;
+        } else if (typeof body.usernames === 'string') {
+          rawUsernames = body.usernames.split(/[\r\n,;]+/);
+        }
+
+        const result = await addAccountsBatchToGroup(groupId, rawUsernames);
+        addLog(`Batch Input: Berhasil menambahkan ${result.added.length} akun ke grup (${result.skipped.length} dilewati/sudah ada)`, 'success');
+
+        sendJson({
+          success: true,
+          added: result.added,
+          skipped: result.skipped,
+          count: result.added.length
+        });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }

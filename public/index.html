@@ -285,7 +285,16 @@
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Tambah ke Grup Ini
+              Tambah
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-open-batch-modal" title="Input banyak akun sekaligus">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+              ⚡ Batch Input
             </button>
           </form>
         </div>
@@ -422,8 +431,47 @@
     </div>
   </div>
 
+  <!-- Modal: Batch Add Accounts -->
+  <div class="modal-overlay" id="modal-batch-add">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">Batch Input</span>
+          <h3 class="modal-title">Tambah Banyak Akun Sekaligus</h3>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-batch">&times;</button>
+      </div>
+      <form id="form-batch-add">
+        <div class="form-group">
+          <label class="form-label" for="batch-target-group">Grup Saluran Tujuan</label>
+          <select id="batch-target-group" class="form-input"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="batch-usernames-text">Daftar Akun TikTok</label>
+          <p class="form-help" style="margin-bottom: 8px;">
+            Tempel daftar akun di sini. Bisa format <code>@username</code>, nama biasa, atau link TikTok. Pisahkan dengan baris baru (Enter), koma, atau spasi. Sistem otomatis membersihkan simbol kutip, baris kosong, dan duplikat.
+          </p>
+          <textarea id="batch-usernames-text" class="form-input" rows="8" placeholder="afifahhgstn&#10;andiriosyahputra&#10;shania.ptr&#10;dipanggilthal&#10;..."></textarea>
+        </div>
+        <div id="batch-parse-summary" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 16px; font-size: 0.85rem;">
+          <span style="color: var(--text-muted);">Terdeteksi otomatis:</span>
+          <strong id="batch-detected-badge" style="color: var(--tiktok-cyan); font-weight: 700;">0 akun valid</strong>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-glass" id="btn-cancel-batch">Batal</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-batch">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            Simpan Semua Akun
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=1.0.6"></script>
+  <script src="app.js?v=1.0.7"></script>
 </body>
 </html>

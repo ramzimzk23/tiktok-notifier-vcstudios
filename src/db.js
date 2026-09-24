@@ -275,6 +275,69 @@ export async function addAccountToGroup(groupId, username, user = null, latestVi
 }
 
 /**
+ * Add Multiple Accounts in Batch to Group (Fast Bulk Insertion)
+ */
+export async function addAccountsBatchToGroup(groupId, rawList) {
+  const cleanUsers = [...new Set(
+    rawList
+      .map((u) =>
+        u
+          .trim()
+          .replace(/^["'@]+|["']+$/g, '')
+          .replace(/https?:\/\/(www\.)?tiktok\.com\/@/i, '')
+          .replace(/[/?#].*$/, '')
+          .toLowerCase()
+      )
+      .filter((u) => u.length > 0)
+  )];
+
+  if (cleanUsers.length === 0) {
+    return { added: [], skipped: [] };
+  }
+
+  const config = await getFullConfig();
+  const group = config.groups.find((g) => g.id === groupId);
+  if (!group) throw new Error('Grup tidak ditemukan');
+
+  const existingSet = new Set((group.accounts || []).map((a) => a.toLowerCase()));
+  const toAdd = cleanUsers.filter((u) => !existingSet.has(u));
+  const skipped = cleanUsers.filter((u) => existingSet.has(u));
+
+  if (toAdd.length > 0) {
+    // 1. Supabase bulk upsert
+    if (isSupabaseActive && supabaseClient) {
+      try {
+        const rows = toAdd.map((username) => ({
+          username,
+          group_id: groupId,
+          nickname: username,
+          avatar_url: '',
+          last_check_time: Date.now()
+        }));
+        await supabaseClient.from('tracked_accounts').upsert(rows, { onConflict: 'username' });
+      } catch (err) {
+        console.error('[DB] Gagal bulk insert akun ke Supabase:', err.message);
+      }
+    }
+
+    // 2. Local config update
+    const local = await readLocalConfig();
+    const localGroup = local.groups.find((g) => g.id === groupId);
+    if (localGroup) {
+      if (!localGroup.accounts) localGroup.accounts = [];
+      for (const u of toAdd) {
+        if (!localGroup.accounts.includes(u)) {
+          localGroup.accounts.push(u);
+        }
+      }
+      await writeLocalConfig(local);
+    }
+  }
+
+  return { added: toAdd, skipped };
+}
+
+/**
  * Remove Account from Group
  */
 export async function removeAccountFromGroup(groupId, username) {

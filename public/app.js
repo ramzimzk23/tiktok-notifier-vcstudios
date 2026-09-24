@@ -652,6 +652,130 @@ if (searchCreatorsInput) {
   });
 }
 
+// --- Batch Add Modal Functionality ---
+function parseBatchUsernames(text) {
+  if (!text) return [];
+  const lines = text.split(/[\r\n,;]+/);
+  const cleaned = lines.map((line) => {
+    return line
+      .trim()
+      .replace(/^["'@]+|["']+$/g, '')
+      .replace(/https?:\/\/(www\.)?tiktok\.com\/@/i, '')
+      .replace(/[/?#].*$/, '')
+      .toLowerCase();
+  }).filter((line) => line.length > 0 && /^[a-zA-Z0-9_.-]+$/.test(line));
+
+  return [...new Set(cleaned)];
+}
+
+const batchModal = document.getElementById('modal-batch-add');
+const batchTextarea = document.getElementById('batch-usernames-text');
+const batchGroupSelect = document.getElementById('batch-target-group');
+const batchBadge = document.getElementById('batch-detected-badge');
+
+function openBatchModal() {
+  const groups = currentStatus?.config?.groups || [];
+  if (groups.length === 0) {
+    showToast('Buat grup saluran terlebih dahulu sebelum menambahkan akun!', true);
+    return;
+  }
+
+  // Populate groups dropdown
+  if (batchGroupSelect) {
+    batchGroupSelect.innerHTML = groups.map((g) => `
+      <option value="${g.id}" ${g.id === activeGroupId ? 'selected' : ''}>
+        ${g.name} (${g.accounts?.length || 0} Akun)
+      </option>
+    `).join('');
+  }
+
+  if (batchTextarea) {
+    batchTextarea.value = '';
+  }
+  if (batchBadge) {
+    batchBadge.textContent = '0 akun valid';
+  }
+  if (batchModal) {
+    batchModal.classList.add('active');
+    if (batchTextarea) batchTextarea.focus();
+  }
+}
+
+function closeBatchModal() {
+  if (batchModal) {
+    batchModal.classList.remove('active');
+  }
+}
+
+const btnOpenBatch = document.getElementById('btn-open-batch-modal');
+if (btnOpenBatch) {
+  btnOpenBatch.addEventListener('click', openBatchModal);
+}
+const btnCloseBatch = document.getElementById('btn-close-batch');
+if (btnCloseBatch) {
+  btnCloseBatch.addEventListener('click', closeBatchModal);
+}
+const btnCancelBatch = document.getElementById('btn-cancel-batch');
+if (btnCancelBatch) {
+  btnCancelBatch.addEventListener('click', closeBatchModal);
+}
+
+if (batchTextarea) {
+  batchTextarea.addEventListener('input', () => {
+    const list = parseBatchUsernames(batchTextarea.value);
+    if (batchBadge) {
+      batchBadge.textContent = `${list.length} akun valid`;
+    }
+  });
+}
+
+const formBatchAdd = document.getElementById('form-batch-add');
+if (formBatchAdd) {
+  formBatchAdd.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const targetGroupId = batchGroupSelect.value;
+    const usernames = parseBatchUsernames(batchTextarea.value);
+
+    if (usernames.length === 0) {
+      showToast('Tidak ada username TikTok yang valid terdeteksi!', true);
+      return;
+    }
+
+    const btnSubmit = document.getElementById('btn-submit-batch');
+    const originalText = btnSubmit.innerHTML;
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Menyimpan ${usernames.length} akun...`;
+
+    try {
+      const res = await authFetch(`/api/groups/${targetGroupId}/accounts/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usernames })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        let msg = `✅ Berhasil menambahkan ${data.count} akun ke grup!`;
+        if (data.skipped && data.skipped.length > 0) {
+          msg += ` (${data.skipped.length} akun sudah terdaftar)`;
+        }
+        showToast(msg);
+        closeBatchModal();
+        activeGroupId = targetGroupId;
+        localStorage.setItem('activeGroupId', targetGroupId);
+        await fetchStatus();
+      } else {
+        showToast(data.error || 'Gagal menambahkan akun batch', true);
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = originalText;
+    }
+  });
+}
+
 document.getElementById('btn-clear-logs').addEventListener('click', () => {
   document.getElementById('terminal-logs-container').innerHTML = `
     <div class="log-entry info">
