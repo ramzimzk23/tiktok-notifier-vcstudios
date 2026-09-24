@@ -95,11 +95,16 @@ function renderDashboard(data) {
   const { config, runtime, state } = data;
   const groups = config.groups || [];
 
-  // Default active group
-  if (!activeGroupId && groups.length > 0) {
-    activeGroupId = groups[0].id;
-  } else if (activeGroupId && !groups.some((g) => g.id === activeGroupId)) {
-    activeGroupId = groups.length > 0 ? groups[0].id : null;
+  // Default active group: remember saved or choose group with accounts
+  const savedGroupId = localStorage.getItem('activeGroupId');
+  if (savedGroupId && groups.some((g) => g.id === savedGroupId)) {
+    activeGroupId = savedGroupId;
+  } else if (!activeGroupId || !groups.some((g) => g.id === activeGroupId)) {
+    const groupWithAccounts = groups.find((g) => (g.accounts?.length || 0) > 0);
+    activeGroupId = groupWithAccounts ? groupWithAccounts.id : (groups[0]?.id || null);
+    if (activeGroupId) {
+      localStorage.setItem('activeGroupId', activeGroupId);
+    }
   }
 
   // Update top metrics
@@ -202,6 +207,7 @@ function renderGroupTabs(groups) {
 
 function selectGroup(groupId) {
   activeGroupId = groupId;
+  localStorage.setItem('activeGroupId', groupId);
   if (currentStatus) {
     renderDashboard(currentStatus);
   }
