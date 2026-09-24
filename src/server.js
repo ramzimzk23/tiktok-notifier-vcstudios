@@ -108,17 +108,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
     }
 
     if (pathname === '/api/auth/register' && req.method === 'POST') {
-      try {
-        const body = await parseBody();
-        const username = (body.username || '').trim();
-        const password = (body.password || '').trim();
-
-        const result = await registerUser(username, password);
-        addLog(`Pengguna baru "${username}" berhasil mendaftar`, 'success');
-        sendJson({ success: true, token: result.token, username });
-      } catch (err) {
-        sendJson({ success: false, error: err.message }, 400);
-      }
+      sendJson({ success: false, error: 'Pendaftaran akun baru telah dinonaktifkan oleh Administrator.' }, 403);
       return;
     }
 

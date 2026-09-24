@@ -232,6 +232,65 @@ function renderGroupBanner(group) {
     ? webhookUrl.replace(/(webhooks\/\d+\/)[a-zA-Z0-9_-]{10,}/, '$1••••••••')
     : '(Belum diatur)';
   document.getElementById('banner-webhook-val').textContent = maskedWebhook;
+
+  // Calculate Group Video Upload Summary (1 Hari, 1 Minggu, 1 Bulan)
+  const stats = calculateGroupVideoStats(group, currentStatus?.runtime?.accountCache || {}, currentStatus?.state || {});
+  const todayEl = document.getElementById('summary-today');
+  const weekEl = document.getElementById('summary-week');
+  const monthEl = document.getElementById('summary-month');
+
+  if (todayEl) todayEl.textContent = `${stats.today} Video`;
+  if (weekEl) weekEl.textContent = `${stats.week} Video`;
+  if (monthEl) monthEl.textContent = `${stats.month} Video`;
+}
+
+function calculateGroupVideoStats(group, cache, state) {
+  if (!group || !group.accounts || group.accounts.length === 0) {
+    return { today: 0, week: 0, month: 0 };
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneDayAgo = nowSec - 24 * 3600;
+  const oneWeekAgo = nowSec - 7 * 24 * 3600;
+  const oneMonthAgo = nowSec - 30 * 24 * 3600;
+
+  let todayCount = 0;
+  let weekCount = 0;
+  let monthCount = 0;
+  const countedVideos = new Set();
+
+  for (const account of group.accounts) {
+    const cleanUser = account.toLowerCase();
+    const cached = cache[cleanUser];
+
+    // Collect all known videos for this account
+    const vList = [];
+    if (cached?.recentVideos && Array.isArray(cached.recentVideos)) {
+      vList.push(...cached.recentVideos);
+    }
+    if (cached?.latestVideo) {
+      vList.push(cached.latestVideo);
+    }
+    // Also check state.json / Supabase state timestamp
+    if (state?.[cleanUser]?.lastPostTime) {
+      vList.push({
+        id: state[cleanUser].lastVideoId || cleanUser,
+        createTime: state[cleanUser].lastPostTime
+      });
+    }
+
+    for (const v of vList) {
+      if (!v || !v.id || countedVideos.has(v.id)) continue;
+      countedVideos.add(v.id);
+
+      const t = v.createTime || 0;
+      if (t >= oneDayAgo) todayCount++;
+      if (t >= oneWeekAgo) weekCount++;
+      if (t >= oneMonthAgo) monthCount++;
+    }
+  }
+
+  return { today: todayCount, week: weekCount, month: monthCount };
 }
 
 // Render Creators Grid
@@ -828,76 +887,6 @@ document.getElementById('btn-toggle-pw').addEventListener('click', () => {
   const pwInput = document.getElementById('login-password');
   const isText = pwInput.type === 'text';
   pwInput.type = isText ? 'password' : 'text';
-});
-
-// Auth Tab Switching
-document.getElementById('btn-tab-login').addEventListener('click', () => {
-  document.getElementById('btn-tab-login').classList.add('active');
-  document.getElementById('btn-tab-register').classList.remove('active');
-  document.getElementById('form-login').style.display = 'block';
-  document.getElementById('form-register').style.display = 'none';
-  document.getElementById('login-alert').style.display = 'none';
-});
-
-document.getElementById('btn-tab-register').addEventListener('click', () => {
-  document.getElementById('btn-tab-register').classList.add('active');
-  document.getElementById('btn-tab-login').classList.remove('active');
-  document.getElementById('form-login').style.display = 'none';
-  document.getElementById('form-register').style.display = 'block';
-  document.getElementById('login-alert').style.display = 'none';
-});
-
-// Toggle Password Visibility (Register Form)
-document.getElementById('btn-toggle-reg-pw').addEventListener('click', () => {
-  const pwInput = document.getElementById('reg-password');
-  const isText = pwInput.type === 'text';
-  pwInput.type = isText ? 'password' : 'text';
-});
-
-// Register Form Submit
-document.getElementById('form-register').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const username = document.getElementById('reg-username').value.trim();
-  const password = document.getElementById('reg-password').value.trim();
-  const confirmPassword = document.getElementById('reg-password-confirm').value.trim();
-  const alertEl = document.getElementById('login-alert');
-  const btn = document.getElementById('btn-submit-register');
-
-  alertEl.style.display = 'none';
-
-  if (password !== confirmPassword) {
-    alertEl.textContent = 'Konfirmasi password tidak cocok!';
-    alertEl.style.display = 'block';
-    return;
-  }
-
-  const original = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Mendaftarkan...`;
-
-  try {
-    const res = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-
-    if (data.success && data.token) {
-      setToken(data.token, true);
-      showToast(`Pendaftaran berhasil! Selamat datang, ${data.username}!`);
-      showDashboardView();
-    } else {
-      alertEl.textContent = data.error || 'Gagal mendaftar.';
-      alertEl.style.display = 'block';
-    }
-  } catch (err) {
-    alertEl.textContent = 'Gagal menghubungi server.';
-    alertEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = original;
-  }
 });
 
 // Logout Button
