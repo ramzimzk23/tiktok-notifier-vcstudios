@@ -368,6 +368,67 @@ export async function removeAccountFromGroup(groupId, username) {
 }
 
 /**
+ * Edit / Rename an Account in a Group
+ */
+export async function editAccountInGroup(groupId, oldUsername, newUsername, newUser = null, newLatestVideo = null) {
+  const cleanOld = oldUsername.trim().replace(/^@/, '').toLowerCase();
+  const cleanNew = newUsername.trim().replace(/^@/, '').toLowerCase();
+
+  if (isSupabaseActive && supabaseClient) {
+    try {
+      // 1. Delete old record
+      await supabaseClient
+        .from('tracked_accounts')
+        .delete()
+        .eq('group_id', groupId)
+        .eq('username', cleanOld);
+
+      // 2. Insert new record
+      await supabaseClient
+        .from('tracked_accounts')
+        .upsert({
+          username: cleanNew,
+          group_id: groupId,
+          nickname: newUser?.nickname || cleanNew,
+          avatar_url: newUser?.avatar || '',
+          last_video_id: newLatestVideo?.id || null,
+          last_post_time: newLatestVideo?.createTime || null,
+          last_check_time: Date.now()
+        });
+    } catch (err) {
+      console.error('[DB] Gagal update akun di Supabase:', err.message);
+    }
+  }
+
+  // Update local config
+  const local = await readLocalConfig();
+  const group = local.groups.find((g) => g.id === groupId);
+  if (group) {
+    const idx = group.accounts.indexOf(cleanOld);
+    if (idx !== -1) {
+      group.accounts[idx] = cleanNew;
+    } else if (!group.accounts.includes(cleanNew)) {
+      group.accounts.push(cleanNew);
+    }
+    await writeLocalConfig(local);
+  }
+
+  // Update local state
+  const state = await readLocalState();
+  delete state[cleanOld];
+  if (newLatestVideo) {
+    state[cleanNew] = {
+      lastVideoId: newLatestVideo.id,
+      lastPostTime: newLatestVideo.createTime,
+      lastCheckTime: Date.now()
+    };
+  }
+  await writeLocalState(state);
+
+  return { cleanOld, cleanNew };
+}
+
+/**
  * Get state for accounts (last known video IDs)
  */
 export async function getAccountStates() {

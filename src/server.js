@@ -11,6 +11,7 @@ import {
   removeGroup,
   addAccountToGroup,
   addAccountsBatchToGroup,
+  editAccountInGroup,
   removeAccountFromGroup,
   getAccountStates,
   isUsingSupabase,
@@ -461,6 +462,76 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         addLog(`Akun @${username} dihapus dari grup`, 'warn');
         sendJson({ success: true, message: `Akun @${username} dihapus` });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
+      return;
+    }
+
+    // 8b. PUT /api/groups/:id/accounts/:username (Edit / Rename TikTok account in group)
+    if (pathname.match(/^\/api\/groups\/([^/]+)\/accounts\/([^/]+)$/) && (req.method === 'PUT' || req.method === 'PATCH')) {
+      try {
+        const match = pathname.match(/^\/api\/groups\/([^/]+)\/accounts\/([^/]+)$/);
+        const groupId = match[1];
+        const oldUsername = decodeURIComponent(match[2]).replace(/^@/, '').trim().toLowerCase();
+        const body = await parseBody();
+        const rawNewUser = (body.newUsername || body.username || '').replace(/^@/, '').trim().toLowerCase();
+
+        if (!rawNewUser) {
+          sendJson({ success: false, error: 'Username baru tidak boleh kosong' }, 400);
+          return;
+        }
+
+        const config = await getFullConfig();
+        const group = config.groups.find((g) => g.id === groupId);
+        if (!group) {
+          sendJson({ success: false, error: 'Grup tidak ditemukan' }, 404);
+          return;
+        }
+
+        if (rawNewUser !== oldUsername && group.accounts.includes(rawNewUser)) {
+          sendJson({ success: false, error: `Akun @${rawNewUser} sudah ada di grup ini` }, 400);
+          return;
+        }
+
+        addLog(`Memverifikasi koreksi username TikTok @${rawNewUser}...`, 'info');
+        const probe = await getTikTokUserVideos(rawNewUser);
+        if (!probe.success) {
+          if (probe.isNotFound) {
+            addLog(`⚠️ PERINGATAN: Koreksi username @${rawNewUser} TIDAK DITEMUKAN di TikTok!`, 'error');
+            sendJson({
+              success: false,
+              isNotFound: true,
+              error: `⚠️ Username TikTok @${rawNewUser} TIDAK DITEMUKAN! Pastikan ejaan sudah benar.`
+            }, 404);
+            return;
+          }
+          sendJson({ success: false, error: `Gagal memverifikasi akun @${rawNewUser}: ${probe.error}` }, 400);
+          return;
+        }
+
+        const latest = probe.videos?.[0] || null;
+        await editAccountInGroup(groupId, oldUsername, rawNewUser, probe.user, latest);
+
+        delete runtimeState.accountCache[oldUsername];
+        if (probe.user) {
+          runtimeState.accountCache[rawNewUser] = {
+            user: probe.user,
+            groupId: group.id,
+            groupName: group.name,
+            latestVideo: latest,
+            recentVideos: (probe.videos || []).map((v) => ({
+              id: v.id,
+              createTime: v.createTime,
+              desc: v.desc || '',
+              url: v.url
+            })),
+            lastUpdated: Date.now()
+          };
+        }
+
+        addLog(`Username TikTok @${oldUsername} berhasil dikoreksi menjadi @${rawNewUser} di grup "${group.name}"!`, 'success');
+        sendJson({ success: true, oldUsername, newUsername: rawNewUser, user: probe.user });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }

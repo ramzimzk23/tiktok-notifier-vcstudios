@@ -428,6 +428,41 @@
     </div>
   </div>
 
+  <!-- Modal: Edit Account Username -->
+  <div class="modal-overlay" id="modal-edit-account">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-badge">Koreksi Akun</span>
+          <h3 class="modal-title">Edit Username TikTok</h3>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-edit-account">&times;</button>
+      </div>
+      <form id="form-edit-account">
+        <input type="hidden" id="edit-account-group-id">
+        <input type="hidden" id="edit-account-old-username">
+        <div class="form-group">
+          <label class="form-label">Username Saat Ini (Salah / Typo)</label>
+          <input type="text" id="edit-account-current-display" class="form-input" disabled style="opacity: 0.7; background: rgba(0,0,0,0.4);">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-account-new-input">Username TikTok Baru (Yang Benar)</label>
+          <div class="input-wrapper">
+            <span class="input-prefix">@</span>
+            <input type="text" id="edit-account-new-input" class="form-input" placeholder="contoh: username_asli" required autocomplete="off">
+          </div>
+          <small class="form-help">Sistem akan langsung memverifikasi profil dan video akun ini ke TikTok.</small>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button type="button" class="btn btn-glass" id="btn-cancel-edit-account">Batal</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-edit-account">
+            <span>Simpan & Verifikasi</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="app.js?v=1.0.8"></script>

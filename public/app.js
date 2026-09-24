@@ -364,12 +364,20 @@ function renderCreators(group, cache, state) {
               <h3 class="creator-name" style="color: #ef4444;">Akun Tidak Ditemukan</h3>
               <span class="creator-handle" style="color: #f87171;">@${username}</span>
             </div>
-            <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus akun salah ini">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button class="btn-edit-account" onclick="openEditAccountModal('${group.id}', '${username}')" title="Koreksi username ini">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus akun salah ini">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div class="warning-card-body">
@@ -386,13 +394,19 @@ function renderCreators(group, cache, state) {
             </p>
           </div>
 
-          <div class="creator-actions">
-            <button class="btn btn-danger-action" onclick="removeAccount('${group.id}', '${username}')" style="width: 100%; justify-content: center;">
+          <div class="creator-actions" style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" onclick="openEditAccountModal('${group.id}', '${username}')" style="flex: 1; justify-content: center; font-size: 0.82rem; padding: 9px 12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Koreksi Username
+            </button>
+            <button class="btn btn-danger-action" onclick="removeAccount('${group.id}', '${username}')" title="Hapus Akun Salah Ini" style="padding: 9px 12px;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
-              Hapus Akun Salah Ini
             </button>
           </div>
         </div>
@@ -421,12 +435,20 @@ function renderCreators(group, cache, state) {
               @${user.uniqueId} ↗
             </a>
           </div>
-          <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus dari grup ini">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button class="btn-edit-account" onclick="openEditAccountModal('${group.id}', '${username}')" title="Edit username TikTok">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus dari grup ini">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="video-preview-box">
@@ -543,6 +565,71 @@ async function removeAccount(groupId, username) {
     showToast(err.message, true);
   }
 }
+
+// Edit Account Modal Logic
+window.openEditAccountModal = function(groupId, username) {
+  document.getElementById('edit-account-group-id').value = groupId;
+  document.getElementById('edit-account-old-username').value = username;
+  document.getElementById('edit-account-current-display').value = `@${username}`;
+  const inputNew = document.getElementById('edit-account-new-input');
+  inputNew.value = username;
+  document.getElementById('modal-edit-account').classList.add('active');
+  setTimeout(() => inputNew.focus(), 150);
+};
+
+function closeEditAccountModal() {
+  document.getElementById('modal-edit-account').classList.remove('active');
+}
+
+const btnCloseEditAccount = document.getElementById('btn-close-edit-account');
+if (btnCloseEditAccount) btnCloseEditAccount.addEventListener('click', closeEditAccountModal);
+
+const btnCancelEditAccount = document.getElementById('btn-cancel-edit-account');
+if (btnCancelEditAccount) btnCancelEditAccount.addEventListener('click', closeEditAccountModal);
+
+document.getElementById('form-edit-account').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const groupId = document.getElementById('edit-account-group-id').value;
+  const oldUsername = document.getElementById('edit-account-old-username').value;
+  const newUsername = document.getElementById('edit-account-new-input').value.trim().replace(/^@/, '');
+  const btn = document.getElementById('btn-submit-edit-account');
+
+  if (!newUsername) {
+    showToast('Username baru tidak boleh kosong!', true);
+    return;
+  }
+
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Memverifikasi...`;
+
+  try {
+    const res = await authFetch(`/api/groups/${groupId}/accounts/${oldUsername}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newUsername })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      showToast(`✅ Username @${oldUsername} berhasil diubah menjadi @${data.newUsername}!`);
+      closeEditAccountModal();
+      fetchStatus();
+    } else {
+      if (data.isNotFound) {
+        showToast(`⚠️ Username @${newUsername} TIDAK DITEMUKAN di TikTok!`, true);
+        alert(`⚠️ PERINGATAN:\n\nUsername TikTok @${newUsername} TIDAK DITEMUKAN di TikTok!\n\nPastikan ejaan username benar (tidak typo) dan akun tersebut aktif.`);
+      } else {
+        showToast(data.error || 'Gagal mengubah username', true);
+      }
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+});
 
 // Add Account Handler
 document.getElementById('form-add-account').addEventListener('submit', async (e) => {

@@ -612,6 +612,21 @@ body {
   background: rgba(239, 68, 68, 0.1);
 }
 
+.btn-edit-account {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.btn-edit-account:hover {
+  color: var(--tiktok-cyan);
+  background: rgba(37, 244, 238, 0.12);
+}
+
 /* Video Preview Block */
 .video-preview-box {
   position: relative;
