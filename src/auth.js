@@ -6,16 +6,32 @@ const RAW_SECRET = process.env.SESSION_SECRET || 'vcstudios-super-secret-auth-ke
 const SECRET = RAW_SECRET.replace(/["'\r\n]/g, '').trim();
 
 /**
- * Retrieve sanitized administrator credentials
+ * Authorized whitelist accounts (Strict 3 accounts only)
  */
-export function getAdminCredentials() {
-  const rawUser = process.env.ADMIN_USERNAME || 'ramzimzk23@virzha.com';
-  const rawPass = process.env.ADMIN_PASSWORD || 'ksbenned123';
+export const AUTHORIZED_ACCOUNTS = [
+  {
+    username: (process.env.ADMIN_USERNAME || 'ramzimzk23@virzha.com').replace(/["']/g, '').trim().toLowerCase(),
+    password: (process.env.ADMIN_PASSWORD || 'ksbenned123').replace(/["'\r\n]/g, '').trim(),
+    role: 'Master Administrator'
+  },
+  {
+    username: 'itsmefahirawork@gmail.com',
+    password: 'Fahira$123',
+    role: 'Member'
+  },
+  {
+    username: 'vcreativeclippers@gmail.com',
+    password: 'Fahira$123',
+    role: 'Member'
+  }
+];
 
-  return {
-    username: rawUser.replace(/["']/g, '').trim().toLowerCase(),
-    password: rawPass.replace(/["'\r\n]/g, '').trim()
-  };
+export function getAdminCredentials() {
+  return AUTHORIZED_ACCOUNTS[0];
+}
+
+export function getAuthorizedUsers() {
+  return AUTHORIZED_ACCOUNTS.map((u) => ({ username: u.username, role: u.role }));
 }
 
 /**
@@ -32,7 +48,7 @@ export function generateAuthToken(username) {
 }
 
 /**
- * Verify HMAC token with timing-safe check and admin identity confirmation
+ * Verify HMAC token with timing-safe check and authorized identity confirmation
  */
 export function verifyAuthToken(token) {
   if (!token || typeof token !== 'string') return false;
@@ -49,9 +65,11 @@ export function verifyAuthToken(token) {
       return false; // Token expired
     }
 
-    // STRICT: Only the designated Administrator can hold a valid active token
-    const admin = getAdminCredentials();
-    if (username.toLowerCase() !== admin.username) {
+    // STRICT: Only one of the 3 authorized accounts can hold a valid active token
+    const isAuthorized = AUTHORIZED_ACCOUNTS.some(
+      (acc) => acc.username === username.toLowerCase()
+    );
+    if (!isAuthorized) {
       return false;
     }
 
@@ -71,7 +89,7 @@ export function verifyAuthToken(token) {
 }
 
 /**
- * Authenticate Administrator (Strict Single-Admin Access)
+ * Authenticate User (Strictly restricted to the 3 authorized accounts)
  * Uses constant-time hashing comparison to prevent timing attacks.
  */
 export async function authenticateUser(username, password) {
@@ -80,16 +98,18 @@ export async function authenticateUser(username, password) {
   const cleanUser = String(username).replace(/["']/g, '').trim().toLowerCase();
   const cleanPass = String(password).replace(/["'\r\n]/g, '').trim();
 
-  const admin = getAdminCredentials();
+  // Find user in whitelist of 3 accounts
+  const targetUser = AUTHORIZED_ACCOUNTS.find(
+    (acc) => acc.username === cleanUser
+  );
 
-  // Check if username matches admin
-  if (cleanUser !== admin.username) {
+  if (!targetUser) {
     return null;
   }
 
   // Timing-safe password check using sha256 digest comparison
   const enteredHash = crypto.createHash('sha256').update(cleanPass).digest();
-  const expectedHash = crypto.createHash('sha256').update(admin.password).digest();
+  const expectedHash = crypto.createHash('sha256').update(targetUser.password).digest();
 
   if (crypto.timingSafeEqual(enteredHash, expectedHash)) {
     return generateAuthToken(cleanUser);
