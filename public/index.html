@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.5">
+  <link rel="stylesheet" href="style.css?v=1.0.6">
 </head>
 <body>
   <div class="glow-bg glow-1"></div>
@@ -290,6 +290,18 @@
           </form>
         </div>
 
+        <!-- Search & Filter Bar for 200 Accounts -->
+        <div class="creators-filter-bar" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div class="input-wrapper" style="flex: 1; max-width: 380px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 12px; color: var(--text-muted);">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="search-creators" placeholder="Cari akun TikTok atau nama..." autocomplete="off" style="padding-left: 8px;">
+          </div>
+          <span id="search-result-count" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;"></span>
+        </div>
+
         <!-- Creators Grid -->
         <div class="creators-grid" id="creators-container">
           <!-- Populated by JS -->
@@ -412,6 +424,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=1.0.5"></script>
+  <script src="app.js?v=1.0.6"></script>
 </body>
 </html>

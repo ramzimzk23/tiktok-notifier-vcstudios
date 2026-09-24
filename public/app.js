@@ -244,10 +244,39 @@ function renderCreators(group, cache, state) {
         Tambahkan username TikTok di kolom atas untuk mulai memantau!
       </div>
     `;
+    const countBadge = document.getElementById('search-result-count');
+    if (countBadge) countBadge.textContent = '';
     return;
   }
 
-  container.innerHTML = group.accounts.map((username) => {
+  const searchInput = document.getElementById('search-creators');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  const filteredAccounts = group.accounts.filter((username) => {
+    if (!query) return true;
+    const cleanUser = username.toLowerCase();
+    const cached = cache[cleanUser] || {};
+    const nick = (cached.user?.nickname || '').toLowerCase();
+    return cleanUser.includes(query) || nick.includes(query);
+  });
+
+  const countBadge = document.getElementById('search-result-count');
+  if (countBadge) {
+    countBadge.textContent = query
+      ? `${filteredAccounts.length} dari ${group.accounts.length} akun`
+      : `${group.accounts.length} Akun`;
+  }
+
+  if (filteredAccounts.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--text-muted);">
+        Tidak ditemukan akun dengan kata kunci "<strong>${query}</strong>".
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filteredAccounts.map((username) => {
     const cached = cache[username.toLowerCase()] || {};
     const user = cached.user || {
       nickname: username,
@@ -262,6 +291,8 @@ function renderCreators(group, cache, state) {
           <img src="${user.avatar || 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'}" 
                alt="${user.nickname}" 
                class="creator-avatar" 
+               loading="lazy"
+               decoding="async"
                onerror="this.src='https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'">
           <div class="creator-info">
             <h3 class="creator-name">${user.nickname}</h3>
@@ -279,7 +310,7 @@ function renderCreators(group, cache, state) {
 
         <div class="video-preview-box">
           ${video ? `
-            <img src="${video.cover}" class="video-thumb" alt="Thumbnail" onerror="this.style.display='none'">
+            <img src="${video.cover}" class="video-thumb" alt="Thumbnail" loading="lazy" decoding="async" onerror="this.style.display='none'">
             <div class="video-overlay">
               <p class="video-caption">${video.desc || '*(Video tanpa caption)*'}</p>
               <div class="video-meta">
@@ -610,6 +641,17 @@ if (groupTabsContainer) {
     }
   });
 }
+
+const searchCreatorsInput = document.getElementById('search-creators');
+if (searchCreatorsInput) {
+  searchCreatorsInput.addEventListener('input', () => {
+    if (currentStatus) {
+      const activeGroup = currentStatus.config?.groups?.find((g) => g.id === activeGroupId) || currentStatus.config?.groups?.[0];
+      renderCreators(activeGroup, currentStatus.runtime?.accountCache || {}, currentStatus.state || {});
+    }
+  });
+}
+
 document.getElementById('btn-clear-logs').addEventListener('click', () => {
   document.getElementById('terminal-logs-container').innerHTML = `
     <div class="log-entry info">

@@ -8,6 +8,7 @@ import ws from 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = path.resolve(__dirname, '../config.json');
 const STATE_FILE = path.resolve(__dirname, '../state.json');
+const CACHE_FILE = path.resolve(__dirname, '../cache.json');
 
 let supabaseClient = null;
 let isSupabaseActive = false;
@@ -83,6 +84,23 @@ async function readLocalState() {
 
 async function writeLocalState(state) {
   await fs.writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+}
+
+export async function readLocalCache() {
+  try {
+    const raw = await fs.readFile(CACHE_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+export async function writeLocalCache(cache) {
+  try {
+    await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[DB] Gagal menulis cache:', err.message);
+  }
 }
 
 // --- Unified Database Interface ---
