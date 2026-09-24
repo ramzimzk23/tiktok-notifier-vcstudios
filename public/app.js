@@ -198,7 +198,7 @@ function renderGroupTabs(groups) {
   }
 
   container.innerHTML = groups.map((g) => `
-    <button class="group-tab ${g.id === activeGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}')">
+    <button type="button" class="group-tab ${g.id === activeGroupId ? 'active' : ''}" data-group-id="${g.id}" onclick="selectGroup('${g.id}')">
       <span>${g.name}</span>
       <span class="group-tab-badge">${g.accounts?.length || 0}</span>
     </button>
@@ -206,12 +206,14 @@ function renderGroupTabs(groups) {
 }
 
 function selectGroup(groupId) {
+  if (!groupId) return;
   activeGroupId = groupId;
   localStorage.setItem('activeGroupId', groupId);
   if (currentStatus) {
     renderDashboard(currentStatus);
   }
 }
+window.selectGroup = selectGroup;
 
 // Render Active Group Banner
 function renderGroupBanner(group) {
@@ -598,6 +600,16 @@ document.getElementById('btn-connect-supabase').addEventListener('click', async 
 });
 
 document.getElementById('btn-manual-check').addEventListener('click', manualCheck);
+
+const groupTabsContainer = document.getElementById('group-tabs-container');
+if (groupTabsContainer) {
+  groupTabsContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('.group-tab');
+    if (btn && btn.dataset.groupId) {
+      selectGroup(btn.dataset.groupId);
+    }
+  });
+}
 document.getElementById('btn-clear-logs').addEventListener('click', () => {
   document.getElementById('terminal-logs-container').innerHTML = `
     <div class="log-entry info">
