@@ -325,6 +325,15 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         addLog(`Memverifikasi akun baru @${username}...`, 'info');
         const probe = await getTikTokUserVideos(username);
         if (!probe.success) {
+          if (probe.isNotFound) {
+            addLog(`⚠️ PERINGATAN: Akun TikTok @${username} TIDAK DITEMUKAN (salah username)!`, 'error');
+            sendJson({
+              success: false,
+              isNotFound: true,
+              error: `⚠️ Akun TikTok @${username} TIDAK DITEMUKAN! Pastikan ejaan username sudah benar.`
+            }, 404);
+            return;
+          }
           sendJson({ success: false, error: `Gagal memverifikasi akun @${username}: ${probe.error}` }, 400);
           return;
         }

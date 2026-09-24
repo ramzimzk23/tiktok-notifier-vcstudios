@@ -1,6 +1,9 @@
 import { checkAccount } from './tracker.js';
 import { createWebServer, addLog, runtimeState } from './server.js';
 import { getFullConfig, isUsingSupabase, readLocalCache, writeLocalCache } from './db.js';
+import { sendDiscordWarningNotification } from './notifier.js';
+
+const warnedNotFoundAccounts = new Set();
 
 let isPolling = false;
 let nextPollTimer = null;
@@ -72,9 +75,37 @@ export async function runPoll(isManual = false) {
               groupId: item.groupId,
               groupName: item.groupName,
               latestVideo: result.videos?.[0] || null,
+              recentVideos: (result.videos || []).map((v) => ({
+                id: v.id,
+                createTime: v.createTime,
+                desc: v.desc || '',
+                url: v.url
+              })),
+              lastUpdated: Date.now()
+            };
+            const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
+            warnedNotFoundAccounts.delete(accKey);
+            cacheDirty = true;
+          } else if (result && result.isNotFound) {
+            // Track not found state so UI can show warning badge
+            runtimeState.accountCache[item.account.toLowerCase()] = {
+              isNotFound: true,
+              user: {
+                nickname: item.account,
+                uniqueId: item.account,
+                avatar: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+              },
+              error: 'Akun TikTok tidak ditemukan (salah username)',
               lastUpdated: Date.now()
             };
             cacheDirty = true;
+            addLog(`⚠️ PERINGATAN: Akun TikTok @${item.account} (${item.groupName}) TIDAK DITEMUKAN. Periksa kembali username!`, 'error');
+
+            const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
+            if (item.webhookUrl && !warnedNotFoundAccounts.has(accKey)) {
+              warnedNotFoundAccounts.add(accKey);
+              await sendDiscordWarningNotification(item.webhookUrl, item.account, item.groupName);
+            }
           }
           return { success: true, account: item.account };
         } catch (err) {

@@ -238,15 +238,26 @@ function renderGroupBanner(group) {
   const todayEl = document.getElementById('summary-today');
   const weekEl = document.getElementById('summary-week');
   const monthEl = document.getElementById('summary-month');
+  const warnPill = document.getElementById('summary-warning-pill');
+  const warnCountEl = document.getElementById('summary-invalid');
 
   if (todayEl) todayEl.textContent = `${stats.today} Video`;
   if (weekEl) weekEl.textContent = `${stats.week} Video`;
   if (monthEl) monthEl.textContent = `${stats.month} Video`;
+
+  if (warnPill && warnCountEl) {
+    if (stats.invalidAccounts > 0) {
+      warnPill.style.display = 'flex';
+      warnCountEl.textContent = `${stats.invalidAccounts} Akun`;
+    } else {
+      warnPill.style.display = 'none';
+    }
+  }
 }
 
 function calculateGroupVideoStats(group, cache, state) {
   if (!group || !group.accounts || group.accounts.length === 0) {
-    return { today: 0, week: 0, month: 0 };
+    return { today: 0, week: 0, month: 0, invalidAccounts: 0 };
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
@@ -257,11 +268,16 @@ function calculateGroupVideoStats(group, cache, state) {
   let todayCount = 0;
   let weekCount = 0;
   let monthCount = 0;
+  let invalidCount = 0;
   const countedVideos = new Set();
 
   for (const account of group.accounts) {
     const cleanUser = account.toLowerCase();
     const cached = cache[cleanUser];
+
+    if (cached?.isNotFound) {
+      invalidCount++;
+    }
 
     // Collect all known videos for this account
     const vList = [];
@@ -290,7 +306,7 @@ function calculateGroupVideoStats(group, cache, state) {
     }
   }
 
-  return { today: todayCount, week: weekCount, month: monthCount };
+  return { today: todayCount, week: weekCount, month: monthCount, invalidAccounts: invalidCount };
 }
 
 // Render Creators Grid
@@ -337,6 +353,52 @@ function renderCreators(group, cache, state) {
 
   container.innerHTML = filteredAccounts.map((username) => {
     const cached = cache[username.toLowerCase()] || {};
+    const isNotFound = cached.isNotFound === true;
+
+    if (isNotFound) {
+      return `
+        <div class="creator-card card-warning-state" id="card-${username}">
+          <div class="creator-header" style="border-bottom: 1px solid rgba(239, 68, 68, 0.25); padding-bottom: 10px;">
+            <div class="creator-avatar warning-avatar">⚠️</div>
+            <div class="creator-info">
+              <h3 class="creator-name" style="color: #ef4444;">Akun Tidak Ditemukan</h3>
+              <span class="creator-handle" style="color: #f87171;">@${username}</span>
+            </div>
+            <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus akun salah ini">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div class="warning-card-body">
+            <div class="warning-badge-pill">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              SALAH USERNAME / TIDAK ADA
+            </div>
+            <p class="warning-card-text">
+              Username <strong>@${username}</strong> tidak ditemukan di TikTok. Kemungkinan ada salah ketik (typo), akun berganti nama, atau sudah dihapus.
+            </p>
+          </div>
+
+          <div class="creator-actions">
+            <button class="btn btn-danger-action" onclick="removeAccount('${group.id}', '${username}')" style="width: 100%; justify-content: center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Hapus Akun Salah Ini
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     const user = cached.user || {
       nickname: username,
       uniqueId: username,
@@ -511,7 +573,12 @@ document.getElementById('form-add-account').addEventListener('submit', async (e)
       input.value = '';
       fetchStatus();
     } else {
-      showToast(`Gagal: ${data.error}`, true);
+      if (data.isNotFound) {
+        showToast(`⚠️ Akun TikTok @${username} TIDAK DITEMUKAN (salah username)!`, true);
+        alert(`⚠️ PERINGATAN:\n\nAkun TikTok @${username} TIDAK DITEMUKAN di TikTok!\n\nPastikan ejaan username benar (tidak ada salah ketik / typo) dan akun tersebut aktif.`);
+      } else {
+        showToast(`Gagal: ${data.error}`, true);
+      }
     }
   } catch (err) {
     showToast(err.message, true);

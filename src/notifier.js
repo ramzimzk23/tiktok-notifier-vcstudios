@@ -81,3 +81,46 @@ export async function sendDiscordNotification(webhookUrl, user, video, groupName
     return false;
   }
 }
+
+/**
+ * Send Discord Warning Alert (e.g. Account not found / invalid username)
+ */
+export async function sendDiscordWarningNotification(webhookUrl, username, groupName = null, reason = 'Akun tidak ditemukan di TikTok') {
+  if (!webhookUrl) return false;
+
+  const payload = {
+    username: 'VCStudios Bot',
+    avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
+    embeds: [
+      {
+        title: `⚠️ Peringatan: Akun @${username} Tidak Ditemukan`,
+        description: `Bot VCStudios mendeteksi bahwa akun **@${username}** tidak ditemukan di TikTok. Kemungkinan akun telah dihapus, berganti nama, atau ada salah ketik (typo).`,
+        color: 0xff9900, // Amber / Warning color
+        fields: [
+          ...(groupName ? [{ name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true }] : []),
+          { name: '🔍 Masalah', value: reason, inline: true },
+          { name: '💡 Solusi', value: 'Periksa kembali ejaan username di Dashboard Web atau hapus akun ini dari daftar.', inline: false }
+        ],
+        footer: {
+          text: 'VCStudios • TikTok Monitor Alert',
+          icon_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+        },
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(8000)
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('[Notifier] Error sending warning alert to Discord:', err.message);
+    return false;
+  }
+}
+

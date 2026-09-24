@@ -18,14 +18,14 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
 
   if (!result.success) {
     console.error(`[Tracker] Gagal mengambil data @${cleanUser}: ${result.error}`);
-    return;
+    return result;
   }
 
   const { user, videos } = result;
 
   if (!videos || videos.length === 0) {
     console.log(`[Tracker] Tidak ada video ditemukan untuk @${cleanUser}`);
-    return;
+    return result;
   }
 
   const latestVideo = videos[0];
@@ -43,7 +43,7 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
     } else {
       console.log(`[Tracker] Baseline disimpan. Notifikasi berikutnya akan dikirim jika ada postingan baru.`);
     }
-    return;
+    return result;
   }
 
   // Account exists in state, check for new video ID

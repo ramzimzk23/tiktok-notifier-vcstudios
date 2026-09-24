@@ -114,13 +114,15 @@ export async function getTikTokUserVideos(username, maxRetries = 2) {
       }
 
       const state = JSON.parse(match[1]);
-      const data = state?.source?.data?.[path];
+      const embedPath = `/embed/@${cleanUser}`;
+      const directPath = `/@${cleanUser}`;
+      const data = state?.source?.data?.[embedPath] || state?.source?.data?.[directPath];
 
-      if (!data) {
-        if (attempt < maxRetries) continue;
+      if (!data || data.isError || data.errorCode === 10221 || data.pageName === 'error') {
         return {
           success: false,
-          error: `No data found in embed state for path ${path}`
+          isNotFound: true,
+          error: `Username TikTok @${cleanUser} tidak ditemukan (Akun tidak ada atau salah ejaan).`
         };
       }
 
