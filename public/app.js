@@ -122,11 +122,37 @@ function renderDashboard(data) {
     dbChip.title = 'Data disimpan di file lokal. Klik Pengaturan untuk menghubungkan Supabase.';
   }
 
-  // Update Countdown timer
-  if (runtime.nextPollTime) {
-    const remaining = Math.max(0, Math.floor((runtime.nextPollTime - Date.now()) / 1000));
-    countdownSeconds = remaining;
-    updateCountdownDisplay();
+  // Update Countdown / Scanning status
+  const countdownEl = document.getElementById('countdown-val');
+  const btnManual = document.getElementById('btn-manual-check');
+
+  if (runtime.isScanning) {
+    const prog = runtime.scanProgress;
+    const currentAcc = prog?.currentAccount ? `@${prog.currentAccount}` : '';
+    countdownEl.innerHTML = `<span style="color:var(--brand-primary); font-size:12px; font-weight:700;">🔄 Scan (${prog?.current || 0}/${prog?.total || 0}) ${currentAcc}</span>`;
+    if (btnManual && !btnManual.disabled) {
+      btnManual.disabled = true;
+      btnManual.innerHTML = `
+        <span class="status-pulse" style="background:#fff"></span>
+        Memindai...
+      `;
+    }
+  } else {
+    if (btnManual && btnManual.disabled) {
+      btnManual.disabled = false;
+      btnManual.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        Scan Semua
+      `;
+    }
+
+    if (runtime.nextPollTime) {
+      const remaining = Math.max(0, Math.floor((runtime.nextPollTime - Date.now()) / 1000));
+      countdownSeconds = remaining;
+      updateCountdownDisplay();
+    }
   }
 
   // Render Group Tabs
@@ -144,13 +170,15 @@ function renderDashboard(data) {
 }
 
 function updateCountdownDisplay() {
+  if (latestStatusData?.runtime?.isScanning) return;
   const mins = Math.floor(countdownSeconds / 60).toString().padStart(2, '0');
   const secs = (countdownSeconds % 60).toString().padStart(2, '0');
-  document.getElementById('countdown-val').textContent = `${mins}:${secs}`;
+  const el = document.getElementById('countdown-val');
+  if (el) el.textContent = `${mins}:${secs}`;
 }
 
 setInterval(() => {
-  if (countdownSeconds > 0) {
+  if (countdownSeconds > 0 && !latestStatusData?.runtime?.isScanning) {
     countdownSeconds--;
     updateCountdownDisplay();
   }

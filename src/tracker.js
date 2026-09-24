@@ -61,4 +61,6 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
     console.log(`[Tracker] Belum ada postingan baru untuk @${cleanUser}. (Video terakhir ID: ${latestVideo.id})`);
     await updateAccountState(cleanUser, accountState.lastVideoId, accountState.lastPostTime);
   }
+
+  return result;
 }

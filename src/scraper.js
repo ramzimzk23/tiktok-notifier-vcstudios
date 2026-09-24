@@ -71,7 +71,10 @@ export async function getTikTokUserVideos(username, maxRetries = 2) {
         await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
       }
 
-      let res = await fetch(targetUrl, { headers });
+      let res = await fetch(targetUrl, { 
+        headers, 
+        signal: AbortSignal.timeout(8000) 
+      });
       let html = await res.text();
 
       if (res.status === 503 || html.includes('overload-protect')) {
@@ -91,7 +94,8 @@ export async function getTikTokUserVideos(username, maxRetries = 2) {
             headers: {
               ...headers,
               'Cookie': `_wafchallengeid=${solvedCookie};`
-            }
+            },
+            signal: AbortSignal.timeout(8000)
           });
           html = await res.text();
         }
