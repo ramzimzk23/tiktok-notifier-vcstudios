@@ -1,0 +1,725 @@
+let currentStatus = null;
+let activeGroupId = null;
+let countdownSeconds = 0;
+let pollTimer = null;
+
+// Auth State Management
+function getToken() {
+  return localStorage.getItem('vcstudios_token') || sessionStorage.getItem('vcstudios_token');
+}
+
+function setToken(token, remember = true) {
+  if (remember) {
+    localStorage.setItem('vcstudios_token', token);
+  } else {
+    sessionStorage.setItem('vcstudios_token', token);
+  }
+}
+
+function clearToken() {
+  localStorage.removeItem('vcstudios_token');
+  sessionStorage.removeItem('vcstudios_token');
+}
+
+// Authenticated fetch wrapper
+async function authFetch(url, options = {}) {
+  const token = getToken();
+  const headers = {
+    ...(options.headers || {}),
+    Authorization: token ? `Bearer ${token}` : ''
+  };
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401 && !url.includes('/api/auth/')) {
+    clearToken();
+    showLoginView();
+    showToast('Sesi Anda telah berakhir. Silakan login kembali.', true);
+    throw new Error('Unauthorized');
+  }
+
+  return response;
+}
+
+// View Toggles
+function showLoginView() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard-view').style.display = 'none';
+  if (pollTimer) clearInterval(pollTimer);
+}
+
+function showDashboardView() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dashboard-view').style.display = 'block';
+  fetchStatus();
+  if (!pollTimer) {
+    pollTimer = setInterval(fetchStatus, 3000);
+  }
+}
+
+// Toast helper
+function showToast(message, isError = false) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.style.borderColor = isError ? '#ef4444' : '#10b981';
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3500);
+}
+
+function formatRelativeTime(timestampMs) {
+  if (!timestampMs) return 'Belum pernah';
+  const diffSec = Math.floor((Date.now() - timestampMs) / 1000);
+  if (diffSec < 10) return 'Baru saja';
+  if (diffSec < 60) return `${diffSec}s lalu`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m lalu`;
+  return new Date(timestampMs).toLocaleTimeString('id-ID');
+}
+
+// Fetch dashboard state
+async function fetchStatus() {
+  try {
+    const res = await authFetch('/api/status');
+    if (!res.ok) throw new Error('Gagal memuat status');
+    currentStatus = await res.json();
+    renderDashboard(currentStatus);
+  } catch (err) {
+    console.error('Error fetching status:', err);
+  }
+}
+
+// Update DOM with state
+function renderDashboard(data) {
+  const { config, runtime, state } = data;
+  const groups = config.groups || [];
+
+  // Default active group
+  if (!activeGroupId && groups.length > 0) {
+    activeGroupId = groups[0].id;
+  } else if (activeGroupId && !groups.some((g) => g.id === activeGroupId)) {
+    activeGroupId = groups.length > 0 ? groups[0].id : null;
+  }
+
+  // Update top metrics
+  const totalAccounts = groups.reduce((acc, g) => acc + (g.accounts?.length || 0), 0);
+  document.getElementById('metric-groups-count').textContent = groups.length;
+  document.getElementById('metric-accounts-count').textContent = totalAccounts;
+  document.getElementById('metric-interval').textContent = `${config.checkIntervalSeconds}s`;
+  document.getElementById('metric-delay').textContent = `${((config.delayBetweenAccountsMs || 2000) / 1000).toFixed(1)}s`;
+
+  // Database indicator
+  const dbChip = document.getElementById('db-status');
+  const dbText = document.getElementById('db-status-text');
+  if (data.isSupabase) {
+    dbChip.classList.add('active');
+    dbText.textContent = '⚡ Supabase';
+    dbChip.title = 'Terhubung ke Supabase Cloud Database';
+  } else {
+    dbChip.classList.remove('active');
+    dbText.textContent = '📁 File Lokal';
+    dbChip.title = 'Data disimpan di file lokal. Klik Pengaturan untuk menghubungkan Supabase.';
+  }
+
+  // Update Countdown timer
+  if (runtime.nextPollTime) {
+    const remaining = Math.max(0, Math.floor((runtime.nextPollTime - Date.now()) / 1000));
+    countdownSeconds = remaining;
+    updateCountdownDisplay();
+  }
+
+  // Render Group Tabs
+  renderGroupTabs(groups);
+
+  // Render Active Group Banner
+  const activeGroup = groups.find((g) => g.id === activeGroupId) || groups[0];
+  renderGroupBanner(activeGroup);
+
+  // Render Creators Grid for active group
+  renderCreators(activeGroup, runtime.accountCache, state);
+
+  // Render Logs
+  renderLogs(runtime.logs);
+}
+
+function updateCountdownDisplay() {
+  const mins = Math.floor(countdownSeconds / 60).toString().padStart(2, '0');
+  const secs = (countdownSeconds % 60).toString().padStart(2, '0');
+  document.getElementById('countdown-val').textContent = `${mins}:${secs}`;
+}
+
+setInterval(() => {
+  if (countdownSeconds > 0) {
+    countdownSeconds--;
+    updateCountdownDisplay();
+  }
+}, 1000);
+
+// Render Group Tabs
+function renderGroupTabs(groups) {
+  const container = document.getElementById('group-tabs-container');
+  if (!groups || groups.length === 0) {
+    container.innerHTML = '<span style="color:var(--text-muted)">Belum ada grup.</span>';
+    return;
+  }
+
+  container.innerHTML = groups.map((g) => `
+    <button class="group-tab ${g.id === activeGroupId ? 'active' : ''}" onclick="selectGroup('${g.id}')">
+      <span>${g.name}</span>
+      <span class="group-tab-badge">${g.accounts?.length || 0}</span>
+    </button>
+  `).join('');
+}
+
+function selectGroup(groupId) {
+  activeGroupId = groupId;
+  if (currentStatus) {
+    renderDashboard(currentStatus);
+  }
+}
+
+// Render Active Group Banner
+function renderGroupBanner(group) {
+  const banner = document.getElementById('group-banner');
+  if (!group) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'flex';
+
+  document.getElementById('banner-group-name').textContent = group.name;
+  document.getElementById('banner-group-count').textContent = `${group.accounts?.length || 0} Akun`;
+
+  const webhookUrl = group.webhookUrl || '';
+  const maskedWebhook = webhookUrl
+    ? webhookUrl.replace(/(webhooks\/\d+\/)[a-zA-Z0-9_-]{10,}/, '$1••••••••')
+    : '(Belum diatur)';
+  document.getElementById('banner-webhook-val').textContent = maskedWebhook;
+}
+
+// Render Creators Grid
+function renderCreators(group, cache, state) {
+  const container = document.getElementById('creators-container');
+  if (!group || !group.accounts || group.accounts.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px 20px; color: var(--text-muted);">
+        Belum ada akun di grup <strong>"${group?.name || 'ini'}"</strong>.<br>
+        Tambahkan username TikTok di kolom atas untuk mulai memantau!
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = group.accounts.map((username) => {
+    const cached = cache[username.toLowerCase()] || {};
+    const user = cached.user || {
+      nickname: username,
+      uniqueId: username,
+      avatar: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+    };
+    const video = cached.latestVideo || null;
+
+    return `
+      <div class="creator-card" id="card-${username}">
+        <div class="creator-header">
+          <img src="${user.avatar || 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'}" 
+               alt="${user.nickname}" 
+               class="creator-avatar" 
+               onerror="this.src='https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'">
+          <div class="creator-info">
+            <h3 class="creator-name">${user.nickname}</h3>
+            <a href="https://www.tiktok.com/@${user.uniqueId}" target="_blank" rel="noreferrer" class="creator-handle">
+              @${user.uniqueId} ↗
+            </a>
+          </div>
+          <button class="btn-remove-account" onclick="removeAccount('${group.id}', '${username}')" title="Hapus dari grup ini">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="video-preview-box">
+          ${video ? `
+            <img src="${video.cover}" class="video-thumb" alt="Thumbnail" onerror="this.style.display='none'">
+            <div class="video-overlay">
+              <p class="video-caption">${video.desc || '*(Video tanpa caption)*'}</p>
+              <div class="video-meta">
+                <span>🕒 ${new Date(video.createTime * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                <span>ID: ${video.id.slice(-6)}</span>
+              </div>
+            </div>
+          ` : `
+            <div style="height:100%; display:flex; align-items:center; justify-content:center; color: var(--text-muted); font-size: 0.85rem;">
+              Sedang memuat data video...
+            </div>
+          `}
+        </div>
+
+        <div class="creator-actions">
+          <button class="btn btn-secondary" onclick="testAccountWebhook('${group.id}', '${username}')" id="btn-test-${username}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+            Tes Webhook
+          </button>
+          ${video ? `
+            <a href="${video.url}" target="_blank" rel="noreferrer" class="btn btn-glass">
+              Buka Video ↗
+            </a>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLogs(logs) {
+  const container = document.getElementById('terminal-logs-container');
+  if (!logs || logs.length === 0) return;
+
+  container.innerHTML = logs.map((log) => `
+    <div class="log-entry ${log.type || 'info'}">
+      <span class="log-time">[${log.timestamp}]</span>
+      <span class="log-msg">${log.message}</span>
+    </div>
+  `).join('');
+}
+
+// Actions
+async function manualCheck() {
+  const btn = document.getElementById('btn-manual-check');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Scanning...`;
+
+  try {
+    const res = await authFetch('/api/check-now', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Pemeriksaan akun TikTok dimulai!');
+      setTimeout(fetchStatus, 1500);
+    } else {
+      showToast(data.message || 'Gagal memulai scan', true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }, 2000);
+  }
+}
+
+async function testAccountWebhook(groupId, username) {
+  const btn = document.getElementById(`btn-test-${username}`);
+  if (btn) btn.disabled = true;
+
+  try {
+    showToast(`Mengirim notifikasi tes untuk @${username}...`);
+    const res = await authFetch('/api/test-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId, username })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`✅ Berhasil terkirim ke Discord!`);
+    } else {
+      showToast(`❌ Gagal: ${data.error || data.message}`, true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+    fetchStatus();
+  }
+}
+
+async function removeAccount(groupId, username) {
+  if (!confirm(`Hapus @${username} dari grup ini?`)) return;
+
+  try {
+    const res = await authFetch(`/api/groups/${groupId}/accounts/${username}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`@${username} berhasil dihapus.`);
+      fetchStatus();
+    } else {
+      showToast(data.error || 'Gagal menghapus', true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+// Add Account Handler
+document.getElementById('form-add-account').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!activeGroupId) {
+    showToast('Pilih grup terlebih dahulu!', true);
+    return;
+  }
+
+  const input = document.getElementById('input-new-username');
+  const btn = document.getElementById('btn-submit-account');
+  const username = input.value.trim();
+  if (!username) return;
+
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Memverifikasi...';
+
+  try {
+    const res = await authFetch(`/api/groups/${activeGroupId}/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Akun @${username} berhasil ditambahkan!`);
+      input.value = '';
+      fetchStatus();
+    } else {
+      showToast(`Gagal: ${data.error}`, true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+});
+
+// Group Modal (Create / Edit)
+const groupModal = document.getElementById('group-modal');
+document.getElementById('btn-create-group').addEventListener('click', () => {
+  document.getElementById('group-modal-title').textContent = 'Buat Grup Channel Baru';
+  document.getElementById('group-modal-id').value = '';
+  document.getElementById('group-modal-name').value = '';
+  document.getElementById('group-modal-webhook').value = '';
+  groupModal.classList.add('active');
+});
+
+document.getElementById('btn-edit-group').addEventListener('click', () => {
+  const currentGroup = currentStatus?.config?.groups?.find((g) => g.id === activeGroupId);
+  if (!currentGroup) return;
+
+  document.getElementById('group-modal-title').textContent = 'Edit Grup Channel';
+  document.getElementById('group-modal-id').value = currentGroup.id;
+  document.getElementById('group-modal-name').value = currentGroup.name;
+  document.getElementById('group-modal-webhook').value = currentGroup.webhookUrl;
+  groupModal.classList.add('active');
+});
+
+document.getElementById('btn-close-group-modal').addEventListener('click', () => {
+  groupModal.classList.remove('active');
+});
+document.getElementById('btn-cancel-group').addEventListener('click', () => {
+  groupModal.classList.remove('active');
+});
+
+document.getElementById('form-group').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('group-modal-id').value;
+  const name = document.getElementById('group-modal-name').value.trim();
+  const webhookUrl = document.getElementById('group-modal-webhook').value.trim();
+
+  const isEdit = !!id;
+  const url = isEdit ? `/api/groups/${id}` : '/api/groups';
+  const method = isEdit ? 'PUT' : 'POST';
+
+  try {
+    const res = await authFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, webhookUrl })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(isEdit ? 'Grup berhasil diperbarui!' : 'Grup baru berhasil dibuat!');
+      groupModal.classList.remove('active');
+      if (!isEdit && data.group) {
+        activeGroupId = data.group.id;
+      }
+      fetchStatus();
+    } else {
+      showToast(data.error || 'Gagal menyimpan grup', true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Delete Group
+document.getElementById('btn-delete-group').addEventListener('click', async () => {
+  if (!activeGroupId) return;
+  const group = currentStatus?.config?.groups?.find((g) => g.id === activeGroupId);
+  if (!group) return;
+
+  if (!confirm(`Apakah Anda yakin ingin menghapus grup "${group.name}" beserta daftar akunnya?`)) return;
+
+  try {
+    const res = await authFetch(`/api/groups/${activeGroupId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Grup berhasil dihapus.');
+      activeGroupId = null;
+      fetchStatus();
+    } else {
+      showToast(data.error || 'Gagal menghapus grup', true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Test Group Webhook Button
+document.getElementById('btn-test-group-webhook').addEventListener('click', () => {
+  if (!activeGroupId) return;
+  const group = currentStatus?.config?.groups?.find((g) => g.id === activeGroupId);
+  const firstAccount = group?.accounts?.[0] || 'varsatilevibes';
+  testAccountWebhook(activeGroupId, firstAccount);
+});
+
+// Settings Modal
+const settingsModal = document.getElementById('settings-modal');
+document.getElementById('btn-open-settings').addEventListener('click', () => {
+  if (currentStatus && currentStatus.config) {
+    document.getElementById('setting-interval').value = currentStatus.config.checkIntervalSeconds || 120;
+    document.getElementById('setting-delay').value = currentStatus.config.delayBetweenAccountsMs || 2000;
+  }
+  settingsModal.classList.add('active');
+});
+
+document.getElementById('btn-close-settings').addEventListener('click', () => {
+  settingsModal.classList.remove('active');
+});
+document.getElementById('btn-cancel-settings').addEventListener('click', () => {
+  settingsModal.classList.remove('active');
+});
+
+document.getElementById('form-settings').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const checkIntervalSeconds = Number(document.getElementById('setting-interval').value);
+  const delayBetweenAccountsMs = Number(document.getElementById('setting-delay').value);
+
+  try {
+    const res = await authFetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkIntervalSeconds, delayBetweenAccountsMs })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Pengaturan berhasil disimpan!');
+      settingsModal.classList.remove('active');
+      fetchStatus();
+    } else {
+      showToast('Gagal menyimpan pengaturan', true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+});
+
+// Connect Supabase Action
+document.getElementById('btn-connect-supabase').addEventListener('click', async () => {
+  const url = document.getElementById('setting-supabase-url').value.trim();
+  const key = document.getElementById('setting-supabase-key').value.trim();
+  const btn = document.getElementById('btn-connect-supabase');
+
+  if (!url || !key) {
+    showToast('Masukkan URL dan Key Supabase terlebih dahulu!', true);
+    return;
+  }
+
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Menghubungkan & Migrasi...';
+
+  try {
+    const res = await authFetch('/api/supabase/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, key })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('⚡ Berhasil terhubung ke Supabase & data disinkronkan!');
+      fetchStatus();
+    } else {
+      showToast(`Gagal: ${data.error}`, true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+});
+
+document.getElementById('btn-manual-check').addEventListener('click', manualCheck);
+document.getElementById('btn-clear-logs').addEventListener('click', () => {
+  document.getElementById('terminal-logs-container').innerHTML = `
+    <div class="log-entry info">
+      <span class="log-time">[${new Date().toLocaleTimeString('id-ID')}]</span>
+      <span class="log-msg">Log dibersihkan oleh pengguna.</span>
+    </div>
+  `;
+});
+
+// Login Form Submit
+document.getElementById('form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+  const remember = document.getElementById('remember-me').checked;
+  const alertEl = document.getElementById('login-alert');
+  const btn = document.getElementById('btn-submit-login');
+
+  alertEl.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Memeriksa...`;
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (data.success && data.token) {
+      setToken(data.token, remember);
+      showToast(`Selamat datang, ${data.username}!`);
+      showDashboardView();
+    } else {
+      alertEl.textContent = data.error || 'Username atau password salah!';
+      alertEl.style.display = 'block';
+    }
+  } catch (err) {
+    alertEl.textContent = 'Gagal menghubungi server.';
+    alertEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<span>Masuk ke Panel Kendali</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>`;
+  }
+});
+
+// Toggle Password Visibility (Login Form)
+document.getElementById('btn-toggle-pw').addEventListener('click', () => {
+  const pwInput = document.getElementById('login-password');
+  const isText = pwInput.type === 'text';
+  pwInput.type = isText ? 'password' : 'text';
+});
+
+// Auth Tab Switching
+document.getElementById('btn-tab-login').addEventListener('click', () => {
+  document.getElementById('btn-tab-login').classList.add('active');
+  document.getElementById('btn-tab-register').classList.remove('active');
+  document.getElementById('form-login').style.display = 'block';
+  document.getElementById('form-register').style.display = 'none';
+  document.getElementById('login-alert').style.display = 'none';
+});
+
+document.getElementById('btn-tab-register').addEventListener('click', () => {
+  document.getElementById('btn-tab-register').classList.add('active');
+  document.getElementById('btn-tab-login').classList.remove('active');
+  document.getElementById('form-login').style.display = 'none';
+  document.getElementById('form-register').style.display = 'block';
+  document.getElementById('login-alert').style.display = 'none';
+});
+
+// Toggle Password Visibility (Register Form)
+document.getElementById('btn-toggle-reg-pw').addEventListener('click', () => {
+  const pwInput = document.getElementById('reg-password');
+  const isText = pwInput.type === 'text';
+  pwInput.type = isText ? 'password' : 'text';
+});
+
+// Register Form Submit
+document.getElementById('form-register').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value.trim();
+  const confirmPassword = document.getElementById('reg-password-confirm').value.trim();
+  const alertEl = document.getElementById('login-alert');
+  const btn = document.getElementById('btn-submit-register');
+
+  alertEl.style.display = 'none';
+
+  if (password !== confirmPassword) {
+    alertEl.textContent = 'Konfirmasi password tidak cocok!';
+    alertEl.style.display = 'block';
+    return;
+  }
+
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="status-pulse" style="background:#fff"></span> Mendaftarkan...`;
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (data.success && data.token) {
+      setToken(data.token, true);
+      showToast(`Pendaftaran berhasil! Selamat datang, ${data.username}!`);
+      showDashboardView();
+    } else {
+      alertEl.textContent = data.error || 'Gagal mendaftar.';
+      alertEl.style.display = 'block';
+    }
+  } catch (err) {
+    alertEl.textContent = 'Gagal menghubungi server.';
+    alertEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+});
+
+// Logout Button
+document.getElementById('btn-logout').addEventListener('click', () => {
+  if (confirm('Apakah Anda yakin ingin keluar?')) {
+    clearToken();
+    showLoginView();
+    showToast('Anda telah keluar dari sistem.');
+  }
+});
+
+// Check Auth on Startup
+async function initAuth() {
+  const token = getToken();
+  if (!token) {
+    showLoginView();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.valid) {
+      showDashboardView();
+    } else {
+      clearToken();
+      showLoginView();
+    }
+  } catch {
+    showLoginView();
+  }
+}
+
+initAuth();

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VCStudios • TikTok Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <!-- 1. Login Gate Screen (Shown if not logged in) -->
+  <div class="login-wrapper" id="login-screen">
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="logo-box large">
+          <svg class="tiktok-svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.83 4.46 6.3 6.3 0 0 0 1.86-4.48V8.71a8.28 8.28 0 0 0 4.9 1.59v-3.61a4.92 4.92 0 0 1-1-.001Z"/>
+          </svg>
+        </div>
+        <h1 class="login-title">VCStudios</h1>
+        <p class="login-subtitle">TikTok Post & Live Monitor • Discord Gateway</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab-btn active" id="btn-tab-login">Masuk</button>
+        <button type="button" class="auth-tab-btn" id="btn-tab-register">Daftar Akun</button>
+      </div>
+
+      <div class="login-alert" id="login-alert" style="display: none;"></div>
+
+      <!-- Form Login -->
+      <form id="form-login" class="login-form">
+        <div class="form-group">
+          <label for="login-username">Username / Email</label>
+          <div class="input-icon-wrapper">
+            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input type="text" id="login-username" class="form-input with-icon" placeholder="Masukkan username / email" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <div class="input-icon-wrapper">
+            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <input type="password" id="login-password" class="form-input with-icon" placeholder="Masukkan password" required autocomplete="current-password">
+            <button type="button" class="btn-toggle-pw" id="btn-toggle-pw" title="Lihat password">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="login-meta">
+          <label class="remember-label">
+            <input type="checkbox" id="remember-me" checked>
+            <span>Ingat sesi saya</span>
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-submit-login">
+          <span>Masuk ke Panel Kendali</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+
+      <!-- Form Register (Daftar Akun Baru) -->
+      <form id="form-register" class="login-form" style="display: none;">
+        <div class="form-group">
+          <label for="reg-username">Username / Email Baru</label>
+          <div class="input-icon-wrapper">
+            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <input type="text" id="reg-username" class="form-input with-icon" placeholder="Contoh: user@gmail.com" required autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-password">Password Baru</label>
+          <div class="input-icon-wrapper">
+            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <input type="password" id="reg-password" class="form-input with-icon" placeholder="Minimal 6 karakter" minlength="6" required autocomplete="new-password">
+            <button type="button" class="btn-toggle-pw" id="btn-toggle-reg-pw" title="Lihat password">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reg-password-confirm">Konfirmasi Password</label>
+          <div class="input-icon-wrapper">
+            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <input type="password" id="reg-password-confirm" class="form-input with-icon" placeholder="Ulangi password" minlength="6" required autocomplete="new-password">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="btn-submit-register">
+          <span>Daftar Akun Baru</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <line x1="20" y1="8" x2="20" y2="14"></line>
+            <line x1="23" y1="11" x2="17" y2="11"></line>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. Main Dashboard Application Layout (Shown after login) -->
+  <div class="app-layout" id="dashboard-view" style="display: none;">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-box">
+          <svg class="tiktok-svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.83 4.46 6.3 6.3 0 0 0 1.86-4.48V8.71a8.28 8.28 0 0 0 4.9 1.59v-3.61a4.92 4.92 0 0 1-1-.001Z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">VCStudios</h1>
+          <p class="brand-sub">TikTok Monitor • Multi-Group Discord Alerts</p>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <div class="db-chip" id="db-status">
+          <span class="db-dot"></span>
+          <span id="db-status-text">Lokal</span>
+        </div>
+        <div class="status-chip" id="poller-status">
+          <span class="status-pulse"></span>
+          <span class="status-text">Poller Aktif</span>
+        </div>
+        <div class="countdown-chip">
+          <span class="chip-label">Scan berikutnya:</span>
+          <span class="countdown-timer" id="countdown-val">--:--</span>
+        </div>
+        <button class="btn btn-primary" id="btn-manual-check">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          Scan Semua
+        </button>
+        <button class="btn btn-glass" id="btn-open-settings" title="Pengaturan Global">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button class="btn btn-glass btn-danger-hover" id="btn-logout" title="Keluar / Logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Metrics Bar -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-icon icon-cyan">📁</div>
+        <div class="metric-content">
+          <span class="metric-label">Total Grup Channel</span>
+          <span class="metric-val" id="metric-groups-count">1</span>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon icon-pink">🎯</div>
+        <div class="metric-content">
+          <span class="metric-label">Total Akun Dipantau</span>
+          <span class="metric-val" id="metric-accounts-count">1</span>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon icon-purple">⏱️</div>
+        <div class="metric-content">
+          <span class="metric-label">Interval Polling</span>
+          <span class="metric-val" id="metric-interval">120s</span>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-icon icon-green">🛡️</div>
+        <div class="metric-content">
+          <span class="metric-label">Pacing Delay</span>
+          <span class="metric-val" id="metric-delay">2.0s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Section: Groups and Target Creators -->
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Grup & Channel Webhook</h2>
+            <p class="section-desc">Pisahkan akun ke webhook Discord yang berbeda-beda</p>
+          </div>
+          <button class="btn btn-secondary" id="btn-create-group">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Buat Grup Baru
+          </button>
+        </div>
+
+        <!-- Group Tabs -->
+        <div class="group-tabs" id="group-tabs-container">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Active Group Details Banner -->
+        <div class="group-banner" id="group-banner">
+          <div class="group-banner-info">
+            <div class="group-banner-title-row">
+              <h3 class="group-banner-name" id="banner-group-name">Nama Grup</h3>
+              <span class="group-badge" id="banner-group-count">0 Akun</span>
+            </div>
+            <p class="group-banner-webhook" id="banner-group-webhook">
+              <span class="webhook-label">Discord Webhook:</span>
+              <span class="webhook-url-val" id="banner-webhook-val">https://discord.com/...</span>
+            </p>
+          </div>
+          <div class="group-banner-actions">
+            <button class="btn btn-secondary btn-sm" id="btn-test-group-webhook">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+              Tes Webhook Grup
+            </button>
+            <button class="btn btn-glass btn-sm" id="btn-edit-group" title="Edit Grup">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit
+            </button>
+            <button class="btn btn-glass btn-sm btn-danger-hover" id="btn-delete-group" title="Hapus Grup">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Add Creator to this Group -->
+        <div class="add-creator-bar">
+          <form id="form-add-account" class="add-account-form">
+            <div class="input-wrapper">
+              <span class="input-prefix">@</span>
+              <input type="text" id="input-new-username" placeholder="username_tiktok" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn btn-primary" id="btn-submit-account">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Tambah ke Grup Ini
+            </button>
+          </form>
+        </div>
+
+        <!-- Creators Grid -->
+        <div class="creators-grid" id="creators-container">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Section: Live Activity Feed -->
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Log Aktivitas Real-Time</h2>
+            <p class="section-desc">Event poller, status antrean delay, dan routing webhook</p>
+          </div>
+          <button class="btn btn-text" id="btn-clear-logs">Hapus Log</button>
+        </div>
+
+        <div class="terminal-card">
+          <div class="terminal-bar">
+            <span class="term-dot red"></span>
+            <span class="term-dot yellow"></span>
+            <span class="term-dot green"></span>
+            <span class="term-title">terminal.log</span>
+          </div>
+          <div class="terminal-logs" id="terminal-logs-container">
+            <div class="log-entry info">
+              <span class="log-time">[16:30:00]</span>
+              <span class="log-msg">Sistem VCStudios TikTok Notifier siap.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Group Modal (Create / Edit) -->
+  <div class="modal-overlay" id="group-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="group-modal-title">Buat Grup Channel Baru</h3>
+        <button class="modal-close" id="btn-close-group-modal">&times;</button>
+      </div>
+      <form id="form-group" class="modal-form">
+        <input type="hidden" id="group-modal-id">
+        <div class="form-group">
+          <label for="group-modal-name">Nama Grup</label>
+          <input type="text" id="group-modal-name" class="form-input" required placeholder="Contoh: Gaming Feed / Entertainment">
+          <small class="form-help">Nama grup yang akan muncul sebagai tag di notifikasi Discord.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="group-modal-webhook">URL Discord Webhook Grup</label>
+          <input type="url" id="group-modal-webhook" class="form-input" required placeholder="https://discord.com/api/webhooks/...">
+          <small class="form-help">Notifikasi untuk akun-akun di grup ini hanya akan dikirim ke webhook ini.</small>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-glass" id="btn-cancel-group">Batal</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-group">Simpan Grup</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Global Settings Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Pengaturan Poller & Anti-Bot</h3>
+        <button class="modal-close" id="btn-close-settings">&times;</button>
+      </div>
+      <form id="form-settings" class="modal-form">
+        <div class="form-group">
+          <label for="setting-interval">Interval Pengecekan Total (Detik)</label>
+          <input type="number" id="setting-interval" class="form-input" min="30" max="3600" step="10" required>
+          <small class="form-help">Default: 120 detik (2 menit). Seluruh grup akan dicek secara bergantian.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="setting-delay">Jeda Antar Akun / Pacing Delay (Milidetik)</label>
+          <input type="number" id="setting-delay" class="form-input" min="500" max="10000" step="500" required>
+          <small class="form-help">Jeda waktu antar akun + jitter acak agar aman dari blokir IP TikTok (Rekomendasi: 2000ms).</small>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border-subtle); margin: 20px 0;">
+
+        <div class="modal-section-title" style="margin-bottom: 12px;">
+          <h4 style="font-size: 0.95rem; font-weight:700; color: #38bdf8; display:flex; align-items:center; gap:8px;">
+            <span>⚡</span> Koneksi Supabase Database
+          </h4>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-top:2px;">
+            Sinkronkan data grup, akun, dan video ke cloud database Supabase secara permanen.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="setting-supabase-url">Supabase Project URL</label>
+          <input type="url" id="setting-supabase-url" class="form-input" placeholder="https://xyzcompany.supabase.co">
+          <small class="form-help">Dapatkan di Project Settings > API di dashboard Supabase Anda.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="setting-supabase-key">Supabase Key (Anon / Service Role)</label>
+          <input type="password" id="setting-supabase-key" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+          <small class="form-help">Pastikan sudah menjalankan script SQL di <code>supabase/schema.sql</code> terlebih dahulu.</small>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-connect-supabase" style="width:100%;">
+            ⚡ Hubungkan & Sinkronkan Data ke Supabase
+          </button>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-glass" id="btn-cancel-settings">Tutup</button>
+          <button type="submit" class="btn btn-primary">Simpan Pengaturan Poller</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
