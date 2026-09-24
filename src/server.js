@@ -177,6 +177,7 @@ export function generateDailyReportData(group, accountCache = {}) {
     formattedDate,
     target,
     totalAccounts: accounts.length,
+    accounts,
     uploadedCount,
     remainingNeeded,
     missingCount: isCompleted ? 0 : remainingNeeded,
@@ -329,6 +330,55 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         uptimeSeconds: Math.floor(process.uptime()),
         timestamp: new Date().toISOString()
       });
+      return;
+    }
+
+    // Public Daily Report Data API (No Login Required)
+    if (pathname === '/api/public/daily-report' && req.method === 'GET') {
+      try {
+        const config = await getFullConfig();
+        const groups = config.groups || [];
+        const targetGroupId = url.searchParams.get('groupId') || url.searchParams.get('group');
+
+        // Ensure account cache is hydrated
+        if (!runtimeState.accountCache || Object.keys(runtimeState.accountCache).length === 0) {
+          try {
+            const dbCache = await loadAccountCacheFromDb();
+            if (dbCache && Object.keys(dbCache).length > 0) {
+              runtimeState.accountCache = dbCache;
+            }
+          } catch {}
+        }
+
+        // Return clean public report without sensitive webhook URLs
+        const groupReports = groups.map((g) => {
+          const report = generateDailyReportData(g, runtimeState.accountCache);
+          return {
+            id: g.id,
+            name: g.name,
+            totalAccounts: g.accounts?.length || 0,
+            report
+          };
+        });
+
+        // Pick requested group or first group that has accounts
+        let selected = null;
+        if (targetGroupId) {
+          selected = groupReports.find((g) => g.id === targetGroupId) || null;
+        }
+        if (!selected) {
+          selected = groupReports.find((g) => g.totalAccounts > 0) || groupReports[0] || null;
+        }
+
+        sendJson({
+          success: true,
+          groups: groupReports.map((g) => ({ id: g.id, name: g.name, totalAccounts: g.totalAccounts })),
+          selectedGroup: selected,
+          timestamp: Date.now()
+        });
+      } catch (err) {
+        sendJson({ success: false, error: err.message }, 500);
+      }
       return;
     }
 
@@ -846,7 +896,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
     }
 
     // Static Files Handler
-    let filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
+    let filePath;
+    if (pathname === '/report' || pathname === '/report/') {
+      filePath = path.join(PUBLIC_DIR, 'report.html');
+    } else {
+      filePath = path.join(PUBLIC_DIR, pathname === '/' ? 'index.html' : pathname);
+    }
 
     if (!filePath.startsWith(PUBLIC_DIR)) {
       res.writeHead(403);

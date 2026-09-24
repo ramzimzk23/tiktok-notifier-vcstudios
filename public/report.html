@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Report Clippers • VCStudios TikTok Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090b10;
+      --bg-card: rgba(18, 22, 34, 0.75);
+      --bg-card-hover: rgba(26, 32, 50, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(37, 244, 238, 0.4);
+      --tiktok-cyan: #25F4EE;
+      --tiktok-pink: #FE2C55;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --status-green: #10b981;
+      --status-yellow: #f59e0b;
+      --status-red: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient Glow Backgrounds */
+    .glow-bg {
+      position: fixed;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      filter: blur(140px);
+      opacity: 0.15;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .glow-1 {
+      top: -100px;
+      left: -100px;
+      background: radial-gradient(circle, var(--tiktok-cyan), transparent);
+    }
+    .glow-2 {
+      bottom: -150px;
+      right: -100px;
+      background: radial-gradient(circle, var(--tiktok-pink), transparent);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Top Navigation / Brand Header */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: rgba(15, 20, 32, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-box {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, rgba(37, 244, 238, 0.15), rgba(254, 44, 85, 0.15));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .logo-svg {
+      width: 24px;
+      height: 24px;
+      color: #fff;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(90deg, #fff 40%, var(--tiktok-cyan) 80%, var(--tiktok-pink) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-tagline {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--status-green);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--status-green);
+      border-radius: 50%;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    .btn-share {
+      background: linear-gradient(135deg, var(--tiktok-cyan), #00b4d8);
+      color: #041019;
+      box-shadow: 0 2px 10px rgba(37, 244, 238, 0.25);
+    }
+
+    .btn-share:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(37, 244, 238, 0.4);
+    }
+
+    /* Group Selector Tabs */
+    .group-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .group-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      background: rgba(18, 22, 34, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .group-tab-btn:hover {
+      background: rgba(26, 32, 50, 0.8);
+      color: #fff;
+    }
+
+    .group-tab-btn.active {
+      background: rgba(37, 244, 238, 0.12);
+      border-color: rgba(37, 244, 238, 0.5);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(37, 244, 238, 0.15);
+    }
+
+    .group-tab-badge {
+      padding: 2px 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .group-tab-btn.active .group-tab-badge {
+      background: rgba(37, 244, 238, 0.25);
+      color: var(--tiktok-cyan);
+    }
+
+    /* ANTI-COPY PROTECTED SECTION */
+    .report-protected-page {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -moz-user-select: none !important;
+      -ms-user-select: none !important;
+    }
+
+    /* Summary Card */
+    .report-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      border-top: 3px solid var(--tiktok-cyan);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .card-title-area h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 6px;
+    }
+
+    .card-meta-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .pill-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .tag-cyan {
+      background: rgba(37, 244, 238, 0.15);
+      color: var(--tiktok-cyan);
+      border: 1px solid rgba(37, 244, 238, 0.3);
+    }
+
+    .tag-date {
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .status-badge {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-badge.completed {
+      background: rgba(16, 185, 129, 0.18);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: #34d399;
+    }
+
+    .status-badge.incomplete {
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #fbbf24;
+    }
+
+    /* Progress bar */
+    .progress-section {
+      margin-top: 14px;
+      padding: 16px;
+      background: rgba(10, 14, 24, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .progress-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .progress-track {
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--tiktok-cyan), #00b4d8);
+      border-radius: 9999px;
+      transition: width 0.5s ease;
+    }
+
+    /* Warnings Banner */
+    .alert-box {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      display: flex;
+      gap: 12px;
+      font-size: 0.82rem;
+      align-items: flex-start;
+    }
+
+    .alert-double {
+      background: rgba(254, 44, 85, 0.12);
+      border: 1px solid rgba(254, 44, 85, 0.35);
+      color: #ffccd5;
+    }
+
+    .alert-incomplete {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fef3c7;
+    }
+
+    /* Report Table Card */
+    .table-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+
+    .table-header-wrap {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .table-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+      width: 100%;
+    }
+
+    table.report-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    table.report-table th {
+      background: rgba(12, 16, 26, 0.85);
+      padding: 14px 18px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    table.report-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+
+    table.report-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Account cell */
+    .clippers-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .clippers-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #1e293b;
+    }
+
+    .clippers-avatar-placeholder {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(37, 244, 238, 0.2), rgba(254, 44, 85, 0.2));
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #fff;
+      font-size: 0.9rem;
+    }
+
+    .clippers-handle {
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .clippers-name {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+
+    /* Status Pills */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status-pill.done {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+
+    .status-pill.double {
+      background: rgba(254, 44, 85, 0.15);
+      border: 1px solid rgba(254, 44, 85, 0.35);
+      color: #f87171;
+    }
+
+    .status-pill.pending {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: #94a3b8;
+    }
+
+    /* Buttons inside table */
+    .btn-xs {
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      border-radius: 6px;
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-cyan {
+      background: rgba(37, 244, 238, 0.15);
+      border: 1px solid rgba(37, 244, 238, 0.4);
+      color: var(--tiktok-cyan);
+    }
+
+    .btn-cyan:hover {
+      background: var(--tiktok-cyan);
+      color: #041019;
+    }
+
+    /* Security Notice Footer */
+    .security-footer {
+      padding: 16px 24px;
+      background: rgba(10, 14, 24, 0.7);
+      border-top: 1px solid var(--border-subtle);
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(15, 20, 32, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--tiktok-cyan);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.3s ease;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 14px 12px 40px; }
+      .header-bar { padding: 14px; }
+      .report-card { padding: 16px; }
+      .card-title-area h2 { font-size: 1.15rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-bg glow-1"></div>
+  <div class="glow-bg glow-2"></div>
+
+  <div class="container report-protected-page">
+    <!-- Header Bar -->
+    <header class="header-bar">
+      <div class="brand-wrap">
+        <div class="logo-box">
+          <svg class="logo-svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.83 4.46 6.3 6.3 0 0 0 1.86-4.48V8.71a8.28 8.28 0 0 0 4.9 1.59v-3.61a4.92 4.92 0 0 1-1-.001Z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">VCStudios • Daily Report</h1>
+          <p class="brand-tagline">Laporan Resmi Aktivitas Unggahan TikTok Clippers</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="live-badge">
+          <span class="pulse-dot"></span>
+          <span>Live Terverifikasi</span>
+        </div>
+        <button type="button" class="btn btn-share" id="btn-copy-page-url" title="Salin tautan halaman laporan ini untuk dibagikan">
+          <span>🔗 Salin Tautan Laporan</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Group Selector Tabs -->
+    <div class="group-tabs" id="group-tabs-container">
+      <!-- Injected by JS -->
+    </div>
+
+    <!-- Daily Report Summary Card -->
+    <section class="report-card" id="report-summary-card">
+      <div class="card-top">
+        <div class="card-title-area">
+          <div class="card-meta-row">
+            <span class="pill-tag tag-cyan">📊 DAILY REPORT</span>
+            <span class="pill-tag tag-date" id="report-date-tag">Hari Ini (WIB)</span>
+            <span class="pill-tag tag-date" id="group-name-tag">Grup Clippers</span>
+          </div>
+          <h2 id="report-heading">Target Kuota: 1 Video di 14 Akun = SELESAI</h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Sistem otomatis menghitung setiap akun unik yang mengunggah minimal 1 video pada hari ini.
+          </p>
+        </div>
+
+        <div>
+          <span class="status-badge incomplete" id="report-status-badge">Memuat status...</span>
+        </div>
+      </div>
+
+      <!-- Progress Section -->
+      <div class="progress-section">
+        <div class="progress-labels">
+          <span style="color: var(--text-muted);">Capaian Kuota Target:</span>
+          <strong id="progress-text" style="color: #fff;">0 / 14 Akun (0%)</strong>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-bar" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Alert Double Upload -->
+      <div class="alert-box alert-double" id="box-double-upload" style="display: none;">
+        <span style="font-size: 1.1rem;">⚠️</span>
+        <div>
+          <strong style="color: #f87171;">Peringatan Double Upload Terdeteksi!</strong>
+          <p id="desc-double-upload" style="margin-top: 2px;">Akun berikut telah mengunggah lebih dari 1 video hari ini:</p>
+        </div>
+      </div>
+
+      <!-- Alert Incomplete -->
+      <div class="alert-box alert-incomplete" id="box-incomplete" style="display: none;">
+        <span style="font-size: 1.1rem;">⏳</span>
+        <div>
+          <strong style="color: #fbbf24;">Target Kuota Belum Tuntas</strong>
+          <p id="desc-incomplete" style="margin-top: 2px;">Masih ada akun yang belum melakukan upload video hari ini.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table of Accounts -->
+    <section class="table-card">
+      <div class="table-header-wrap">
+        <div class="table-title">
+          <span>📋 Rincian Postingan Clippers Hari Ini</span>
+          <span id="table-count-badge" class="pill-tag tag-cyan">0 Akun</span>
+        </div>
+        <span style="font-size: 0.76rem; color: var(--text-muted);">
+          Teks laporan dikunci anti-edit • Hanya link TikTok yang dapat disalin
+        </span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">#</th>
+              <th>Akun Clippers</th>
+              <th>Status Upload Hari Ini</th>
+              <th>Waktu Upload (WIB)</th>
+              <th>Deskripsi / Caption TikTok</th>
+              <th style="min-width: 170px;">Tautan & Salin Link</th>
+            </tr>
+          </thead>
+          <tbody id="report-table-body">
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                Memuat data laporan...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="security-footer">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--tiktok-cyan); flex-shrink: 0;">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <span>Proteksi Integritas: Halaman ini dapat diakses secara publik tanpa login. Seluruh data disinkronkan langsung dari TikTok. Teks dikunci dari penyalinan untuk mencegah manipulasi. Gunakan tombol <strong>"Salin Link"</strong> untuk menyalin URL video resmi.</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let reportData = null;
+    let selectedGroupId = null;
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.borderColor = isError ? '#ef4444' : '#25F4EE';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // Dedicated Link Copy Function: ONLY copies the TikTok URL
+    async function copyOnlyTikTokLink(url, account) {
+      if (!url) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url);
+        } else {
+          const temp = document.createElement('input');
+          temp.value = url;
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+        showToast(`📋 Link video @${account} berhasil disalin!`);
+      } catch (err) {
+        showToast(`Gagal menyalin tautan: ${err.message}`, true);
+      }
+    }
+
+    // Share Current Public Report Page URL
+    document.getElementById('btn-copy-page-url').addEventListener('click', async () => {
+      const currentUrl = window.location.href;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(currentUrl);
+        } else {
+          const temp = document.createElement('input');
+          temp.value = currentUrl;
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+        showToast('🔗 Tautan Laporan Publik berhasil disalin! Siap dibagikan.');
+      } catch {
+        showToast('Gagal menyalin tautan halaman', true);
+      }
+    });
+
+    // Anti-Copy Text Protection on Protected Section
+    const protectedContainer = document.querySelector('.report-protected-page');
+    if (protectedContainer) {
+      protectedContainer.addEventListener('copy', (e) => {
+        e.preventDefault();
+        showToast('🔒 Teks laporan dikunci anti-edit. Hanya link video yang dapat disalin via tombol "Salin Link".', true);
+      });
+      protectedContainer.addEventListener('cut', (e) => {
+        e.preventDefault();
+      });
+    }
+
+    // Fetch Public Daily Report
+    async function fetchPublicReport() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const groupParam = urlParams.get('group') || urlParams.get('groupId') || selectedGroupId || '';
+        const endpoint = `/api/public/daily-report${groupParam ? `?group=${encodeURIComponent(groupParam)}` : ''}`;
+
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error('Gagal mengambil laporan publik');
+        const json = await res.json();
+
+        if (json.success) {
+          reportData = json;
+          renderPublicReport(json);
+        }
+      } catch (err) {
+        console.error('Error:', err);
+      }
+    }
+
+    function selectGroupTab(groupId) {
+      selectedGroupId = groupId;
+      const url = new URL(window.location);
+      url.searchParams.set('group', groupId);
+      window.history.replaceState({}, '', url);
+      fetchPublicReport();
+    }
+
+    function renderPublicReport(data) {
+      const groups = data.groups || [];
+      const selected = data.selectedGroup;
+
+      // 1. Render Group Tabs
+      const tabsContainer = document.getElementById('group-tabs-container');
+      if (tabsContainer) {
+        tabsContainer.innerHTML = groups.map((g) => {
+          const isActive = selected && selected.id === g.id;
+          return `
+            <button type="button" class="group-tab-btn ${isActive ? 'active' : ''}" onclick="selectGroupTab('${g.id}')">
+              <span>${escapeHtml(g.name)}</span>
+              <span class="group-tab-badge">${g.totalAccounts} Akun</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      if (!selected || !selected.report) {
+        document.getElementById('report-table-body').innerHTML = `
+          <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Tidak ada data laporan.</td></tr>
+        `;
+        return;
+      }
+
+      const rep = selected.report;
+      const groupName = selected.name;
+
+      // 2. Summary Card
+      document.getElementById('report-date-tag').textContent = rep.formattedDate || 'Hari Ini (WIB)';
+      document.getElementById('group-name-tag').textContent = `Grup: ${groupName}`;
+
+      const statusBadge = document.getElementById('report-status-badge');
+      const progressText = document.getElementById('progress-text');
+      const progressBar = document.getElementById('progress-bar');
+      const boxDouble = document.getElementById('box-double-upload');
+      const descDouble = document.getElementById('desc-double-upload');
+      const boxIncomplete = document.getElementById('box-incomplete');
+      const descIncomplete = document.getElementById('desc-incomplete');
+
+      if (rep.isCompleted) {
+        statusBadge.className = 'status-badge completed';
+        statusBadge.textContent = `✅ SELESAI (${rep.uploadedCount}/${rep.target} Akun)`;
+      } else {
+        statusBadge.className = 'status-badge incomplete';
+        statusBadge.textContent = `⚠️ BELUM TUNTAS (${rep.remainingNeeded} Akun Lagi)`;
+      }
+
+      progressText.textContent = `${rep.uploadedCount} / ${rep.target} Akun (${rep.percentage}%)`;
+      progressBar.style.width = `${rep.percentage}%`;
+
+      // Double upload warning
+      if (rep.doubles && rep.doubles.length > 0) {
+        boxDouble.style.display = 'flex';
+        descDouble.textContent = `${rep.doubles.length} akun melakukan double upload: ` +
+          rep.doubles.map((d) => `@${d.account} (${d.count} video)`).join(', ');
+      } else {
+        boxDouble.style.display = 'none';
+      }
+
+      // Incomplete warning
+      if (!rep.isCompleted && rep.remainingNeeded > 0) {
+        boxIncomplete.style.display = 'flex';
+        const sample = (rep.missing || []).slice(0, 5).map((m) => `@${m}`).join(', ');
+        const more = (rep.missing || []).length > 5 ? ` dan ${(rep.missing || []).length - 5} lainnya` : '';
+        descIncomplete.textContent = `${(rep.missing || []).length} akun belum upload: ${sample}${more}. Masih butuh ${rep.remainingNeeded} akun lagi untuk memenuhi kuota target 14 akun.`;
+      } else {
+        boxIncomplete.style.display = 'none';
+      }
+
+      // 3. Render Table
+      document.getElementById('table-count-badge').textContent = `${rep.uploadedCount}/${selected.totalAccounts} Akun Upload (${rep.isCompleted ? 'Target Selesai' : 'Belum Tuntas'})`;
+
+      const tbody = document.getElementById('report-table-body');
+      const uploadedMap = new Map();
+      (rep.uploaded || []).forEach((u) => uploadedMap.set(u.account.toLowerCase(), u));
+      const doublesMap = new Map();
+      (rep.doubles || []).forEach((d) => doublesMap.set(d.account.toLowerCase(), d));
+
+      const allAccounts = rep.accounts || [];
+
+      // Sort: uploaded first, then missing
+      const sorted = [...allAccounts].sort((a, b) => {
+        const aUp = uploadedMap.get(a.toLowerCase());
+        const bUp = uploadedMap.get(b.toLowerCase());
+        if (aUp && !bUp) return -1;
+        if (!aUp && bUp) return 1;
+        if (aUp && bUp) {
+          return (bUp.todayVideos?.length || 0) - (aUp.todayVideos?.length || 0);
+        }
+        return a.localeCompare(b);
+      });
+
+      if (sorted.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">Tidak ada akun pada grup ini.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = sorted.map((accRaw, idx) => {
+        const acc = accRaw.toLowerCase();
+        const up = uploadedMap.get(acc);
+        const dbl = doublesMap.get(acc);
+
+        let statusHtml = '';
+        let timeStr = '<span style="color:var(--text-muted)">-</span>';
+        let captionHtml = '<span style="color:var(--text-muted); font-style:italic;">Belum ada postingan hari ini</span>';
+        let actionsHtml = '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
+
+        if (up) {
+          const videoCount = up.todayVideos ? up.todayVideos.length : 1;
+          if (videoCount > 1) {
+            statusHtml = `<span class="status-pill double">⚠️ Double (${videoCount} Video)</span>`;
+          } else {
+            statusHtml = `<span class="status-pill done">✅ Selesai (1 Video)</span>`;
+          }
+
+          if (up.createTime) {
+            const dateObj = new Date(up.createTime * 1000);
+            timeStr = new Intl.DateTimeFormat('id-ID', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              timeZone: 'Asia/Jakarta'
+            }).format(dateObj) + ' WIB';
+          }
+
+          const desc = up.desc || '(Tanpa caption)';
+          const shortDesc = desc.length > 55 ? desc.substring(0, 52) + '...' : desc;
+          captionHtml = `<span title="${escapeHtml(desc)}" style="color: #cbd5e1; font-size: 0.82rem;">${escapeHtml(shortDesc)}</span>`;
+
+          actionsHtml = `
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <a href="${escapeHtml(up.videoUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-xs btn-outline" style="text-decoration:none;">
+                🔗 Buka Video
+              </a>
+              <button type="button" class="btn btn-xs btn-cyan" onclick="copyOnlyTikTokLink('${escapeHtml(up.videoUrl)}', '${escapeHtml(acc)}')">
+                📋 Salin Link
+              </button>
+            </div>
+          `;
+        } else {
+          statusHtml = `<span class="status-pill pending">⏳ Belum Upload</span>`;
+        }
+
+        const avatarPlaceholder = `<div class="clippers-avatar-placeholder">${acc.charAt(0).toUpperCase()}</div>`;
+
+        return `
+          <tr>
+            <td style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">${idx + 1}</td>
+            <td>
+              <div class="clippers-cell">
+                ${avatarPlaceholder}
+                <div>
+                  <div class="clippers-handle">@${escapeHtml(acc)}</div>
+                  <div class="clippers-name">${escapeHtml(acc)}</div>
+                </div>
+              </div>
+            </td>
+            <td>${statusHtml}</td>
+            <td style="font-size: 0.8rem; font-family: 'JetBrains Mono', monospace;">${timeStr}</td>
+            <td>${captionHtml}</td>
+            <td>${actionsHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Initial Load & Auto-Refresh every 20 seconds
+    fetchPublicReport();
+    setInterval(fetchPublicReport, 20000);
+  </script>
+</body>
+</html>

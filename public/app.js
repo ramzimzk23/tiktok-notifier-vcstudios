@@ -548,6 +548,11 @@ function renderDailyReportCard(group, cache = {}) {
     }
   }
 
+  // Update public share link URL for currently selected group
+  if (typeof updatePublicLinkUrls === 'function') {
+    updatePublicLinkUrls();
+  }
+
   // Render the protected report table
   renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target);
 }
@@ -1577,6 +1582,41 @@ if (warnDiscordReportBtn) {
     } finally {
       warnDiscordReportBtn.disabled = false;
       warnDiscordReportBtn.innerHTML = originalText;
+    }
+  });
+}
+
+// Copy Public Report Link (Accessible by anyone without login)
+const copyPublicLinkBtn = document.getElementById('btn-copy-public-link');
+const openPublicLinkEl = document.getElementById('btn-open-public-link');
+
+function updatePublicLinkUrls() {
+  const url = activeGroupId
+    ? `${window.location.origin}/report?group=${activeGroupId}`
+    : `${window.location.origin}/report`;
+  if (openPublicLinkEl) {
+    openPublicLinkEl.href = activeGroupId ? `/report?group=${activeGroupId}` : '/report';
+  }
+  return url;
+}
+
+if (copyPublicLinkBtn) {
+  copyPublicLinkBtn.addEventListener('click', async () => {
+    const publicUrl = updatePublicLinkUrls();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(publicUrl);
+      } else {
+        const temp = document.createElement('input');
+        temp.value = publicUrl;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      }
+      showToast('🔗 Tautan Laporan Publik berhasil disalin! Siap dibagikan ke siapa saja tanpa perlu login.');
+    } catch {
+      showToast(`Tautan laporan: ${publicUrl}`);
     }
   });
 }
