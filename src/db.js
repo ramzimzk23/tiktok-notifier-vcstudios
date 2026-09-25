@@ -416,6 +416,7 @@ export async function getFullConfig() {
 
         let webhooks = [];
         let primaryWebhookUrl = '';
+        let taskReminderStartTime = '09:00';
         let taskDeadline = '22:00';
         let taskWarningIntervalMinutes = 60;
         let taskReminder10MinEnabled = true;
@@ -476,11 +477,16 @@ export async function getFullConfig() {
         };
       });
 
-      return {
+      const fullConfig = {
         checkIntervalSeconds: settingsData?.check_interval_seconds || 120,
         delayBetweenAccountsMs: settingsData?.delay_between_accounts_ms || 2000,
         groups
       };
+
+      // Keep local file updated as fallback cache
+      writeLocalConfig(fullConfig).catch(() => {});
+
+      return fullConfig;
     } catch (err) {
       console.error('[DB] Gagal membaca dari Supabase, beralih ke cache lokal:', err.message);
     }

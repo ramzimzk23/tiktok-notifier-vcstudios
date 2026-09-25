@@ -1,5 +1,156 @@
 {
   "checkIntervalSeconds": 120,
   "delayBetweenAccountsMs": 2000,
-  "groups": []
+  "groups": [
+    {
+      "id": "group-1790252985524",
+      "name": "Nabila",
+      "webhookUrl": "https://discord.com/api/webhooks/1552960828267823225/c0zj-STaehAvMil8ZgzQ0Kh2EOvEFDoXNh7phpq1UtfwkZs2JGJbasJH6OFzMzfF2rgV",
+      "webhooks": [
+        {
+          "url": "https://discord.com/api/webhooks/1552960828267823225/c0zj-STaehAvMil8ZgzQ0Kh2EOvEFDoXNh7phpq1UtfwkZs2JGJbasJH6OFzMzfF2rgV",
+          "name": "Admin",
+          "events": [
+            "new_video",
+            "daily_report",
+            "double_upload",
+            "account_not_found"
+          ],
+          "mention": "everyone",
+          "mentionRole": ""
+        },
+        {
+          "url": "https://discord.com/api/webhooks/1552987370272587877/hVaKPxZhLOd4fSQASRs3c8pi6px0Qu3qmmvBQo47ozgVMDxji03LtE8mZdmk4U2kalDP",
+          "name": "Remainder",
+          "events": [
+            "task_warning",
+            "daily_report"
+          ],
+          "mention": "everyone",
+          "mentionRole": ""
+        }
+      ],
+      "taskReminderStartTime": "09:00",
+      "taskDeadline": "22:00",
+      "taskWarningIntervalMinutes": 30,
+      "taskReminder10MinEnabled": true,
+      "taskReminderMinutes": 10,
+      "taskReminderEnabled": true,
+      "accounts": [
+        "afifahhgstn",
+        "andiriosyahputra",
+        "rahmadi.smhd",
+        "nurhayati_8676",
+        "ilyas.hamid73",
+        "ardiansyhputra09",
+        "sashfira.abigail",
+        "citradrmwn",
+        "aisha.miranti",
+        "sumiatunsolihah",
+        "ilhamprstyo13",
+        "ervan.gnwn",
+        "rasexsyahhh",
+        "amndacdvis",
+        "iskandaarpadi",
+        "adam.rafi45",
+        "yudyudi_s",
+        "aditya.frmnsyh31",
+        "agniarifqa",
+        "kevvv.mhndr",
+        "keylaa7497",
+        "tiaraahmw",
+        "kaylaaputtriii",
+        "erichaxyzz",
+        "shaniaa.ptr",
+        "tarisyahanna",
+        "bagassaptra5",
+        "vmusic.rock",
+        "ichaaasecret",
+        "vidyaputririyani",
+        "indra.iqbal7",
+        "fitriiiyyyaaa1",
+        "dipanggilthal",
+        "bila67696",
+        "cintyapramudya",
+        "salsabilaptrqt",
+        "isa.malikii",
+        "nadaruang_",
+        "vasnaayu",
+        "ninis.chalifah",
+        "aleshaamaheswarii"
+      ]
+    },
+    {
+      "id": "group-1790253037614",
+      "name": "Fani",
+      "webhookUrl": "https://discord.com/api/webhooks/1552961004521127976/PFuzC0TMFERYLXhhH2Sw8M23vU2elwOOt7nq2FDuVhfgCs9iX15l49-B4eYc-8E64x5X",
+      "webhooks": [
+        {
+          "url": "https://discord.com/api/webhooks/1552961004521127976/PFuzC0TMFERYLXhhH2Sw8M23vU2elwOOt7nq2FDuVhfgCs9iX15l49-B4eYc-8E64x5X",
+          "name": "notif admin",
+          "events": [
+            "new_video",
+            "double_upload"
+          ],
+          "mention": "everyone",
+          "mentionRole": ""
+        },
+        {
+          "url": "https://discord.com/api/webhooks/1552990567925940314/MKJ0bN0KNFO3mZD8355QQOtA1tiLOVxqEH-I-Ig5hzVS_U-0zeJsfp2FkqxYb8D-eEDt",
+          "name": "Remainder",
+          "events": [
+            "task_warning"
+          ],
+          "mention": "everyone",
+          "mentionRole": "@a7henares"
+        }
+      ],
+      "taskReminderStartTime": "09:00",
+      "taskDeadline": "22:00",
+      "taskWarningIntervalMinutes": 30,
+      "taskReminder10MinEnabled": true,
+      "taskReminderMinutes": 10,
+      "taskReminderEnabled": true,
+      "accounts": [
+        "andri.budianto75",
+        "lulu_arafah",
+        "novaagustina_",
+        "nasution_marissa",
+        "nathalia.azarine",
+        "firasonia_",
+        "dzikriaabdl",
+        "afterwork.music",
+        "ichanursalma",
+        "rendymahesaa",
+        "arya.maul23",
+        "azzhrauliaa8",
+        "aldittorahman",
+        "d.andreasd",
+        "intanprmmta",
+        "gyovano.rasyad",
+        "farel.alkatiri6",
+        "alfin.krnwn_",
+        "aninditavtr",
+        "virzhahour",
+        "alvaro.pratama173",
+        "alif.nur.fadilah5",
+        "sandiftrrhmn",
+        "shazarine.ayu",
+        "malikasyahiraa",
+        "puspita.dewi897",
+        "stolentearts",
+        "haira_sptn",
+        "fanirahmaptr",
+        "ika.whyuni",
+        "galuhfadilah",
+        "iqbal.setiawan2042",
+        "fajaraharja",
+        "khalifa.affandi",
+        "galangsaaputrra",
+        "salwa.hamimi",
+        "biancasafirazahra",
+        "zenyasafira"
+      ]
+    }
+  ]
 }
