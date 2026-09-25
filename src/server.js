@@ -45,7 +45,8 @@ export const runtimeState = {
   lastPollTime: null,
   nextPollTime: null,
   logs: [],
-  accountCache: {}
+  accountCache: {},
+  lastPeriodicWarningTimestamps: new Map()
 };
 
 export function addLog(message, type = 'info') {
@@ -659,6 +660,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         if (body.taskReminderEnabled !== undefined) group.taskReminderEnabled = Boolean(body.taskReminderEnabled);
 
         await upsertGroup(group);
+        runtimeState.lastPeriodicWarningTimestamps?.delete(group.id);
         addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, interval: ${group.taskWarningIntervalMinutes || 60}m, ${group.webhooks?.length || 0} webhook)`, 'success');
         sendJson({ success: true, group });
       } catch (err) {

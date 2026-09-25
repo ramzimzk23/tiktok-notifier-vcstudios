@@ -303,32 +303,21 @@ export async function sendDiscordIncompleteWarning(
     reminderMinutes = 10
   } = options;
 
-  let title = '';
-  let description = '';
-  let content = '';
-  let color = 0xffaa00; // Amber
+  const formattedDeadline = (deadlineTime || '22:00').replace(':', '.');
 
-  if (reminderType === 'periodic_interval') {
-    const intervalMins = options.intervalMinutes || 60;
-    title = `⏰ Peringatan Berkala Task: Target Belum Selesai (${completedCount}/${targetCount} Akun)`;
-    description = `Peringatan otomatis berkala (setiap **${intervalMins} menit**) untuk tim clippers **${groupName}**.\nSaat ini baru **${completedCount} dari ${targetCount} akun** yang selesai mengunggah (masih kurang **${remainingNeeded} akun** lagi menuju batas waktu **${deadlineTime} WIB**).`;
-    content = `@everyone ⏰ **PERINGATAN TASK BERKALA (Setiap ${intervalMins} Menit):** Grup **${groupName}** baru menyelesaikan ${completedCount}/${targetCount} akun (kurang ${remainingNeeded} akun lagi). Batas waktu: **${deadlineTime} WIB**!`;
-    color = 0xf59e0b; // Amber / Orange
-  } else if (reminderType === '10_min_reminder') {
-    title = `⏰ Peringatan Task: ${reminderMinutes} Menit Menuju Batas Waktu (${deadlineTime} WIB)`;
-    description = `Perhatian untuk tim clippers **${groupName}**!\nBatas waktu penyelesaian task harian akan berakhir dalam **${reminderMinutes} menit lagi** (pukul **${deadlineTime} WIB**).\n\nSaat ini baru **${completedCount} dari ${targetCount} akun** yang selesai mengunggah (masih kurang **${remainingNeeded} akun** lagi). Segera upload sebelum batas waktu berakhir!`;
-    content = `@everyone 🚨 **PERINGATAN TERAKHIR (${reminderMinutes} MENIT LAGI SEBELUM DEADLINE):** Batas waktu task harian grup **${groupName}** berakhir pada pukul **${deadlineTime} WIB**! Baru **${completedCount}/${targetCount} akun** selesai. Segera upload sebelum waktu habis!`;
-    color = 0xff3b30; // Bright Red Alert
+  let title = '‼️🚨REMINDER🚨‼️';
+  let description = `**${groupName}**…. upload TikToknyaaa!!!\nbatas kirim report jam **${formattedDeadline} WIB**👿💥`;
+  let content = `@everyone\n‼️🚨REMINDER🚨‼️\n${groupName}…. upload TikToknyaaa!!!\nbatas kirim report jam ${formattedDeadline} WIB👿💥`;
+  let color = 0xfe2c55; // TikTok Signature Alert Red
+
+  if (reminderType === '10_min_reminder') {
+    title = `‼️🚨REMINDER (${reminderMinutes} MENIT LAGI)🚨‼️`;
+    description = `**${groupName}**…. upload TikToknyaaa!!!\n🚨 **${reminderMinutes} Menit Menuju Deadline!** Batas kirim report jam **${formattedDeadline} WIB**👿💥`;
   } else if (reminderType === 'deadline_reached') {
-    title = `🚨 Batas Waktu Task Selesai (${deadlineTime} WIB): Kuota Belum Tercapai!`;
-    description = `Batas waktu penyelesaian task harian untuk grup **${groupName}** telah **HABIS** pada pukul **${deadlineTime} WIB**.\nTarget kuota **1 video di ${targetCount} akun** belum tuntas.`;
-    content = `@everyone 🚨 **BATAS WAKTU SELESAI (${deadlineTime} WIB):** Task harian grup **${groupName}** belum tuntas! Hanya tercapai **${completedCount}/${targetCount} akun** (kurang **${remainingNeeded} akun**).`;
-    color = 0xef4444; // Red
-  } else {
-    title = `⚠️ Target Kuota Harian Belum Selesai (${completedCount}/${targetCount} Akun)`;
-    description = `Grup **${groupName}** ditargetkan **1 video di ${targetCount} akun = Selesai**.\nSaat ini baru **${completedCount} akun** yang selesai mengunggah (kurang **${remainingNeeded} akun** lagi).`;
-    content = `@everyone ⚠️ **PERINGATAN TARGET BELUM SELESAI:** Grup **${groupName}** baru menyelesaikan ${completedCount}/${targetCount} akun hari ini (kurang ${remainingNeeded} akun lagi)!`;
-    color = 0xffaa00;
+    title = '🚨 BATAS WAKTU SELESAI 🚨';
+    description = `**${groupName}**…. batas kirim report jam **${formattedDeadline} WIB** telah berakhir! Target kuota belum tercapai.👿💥`;
+    content = `@everyone\n🚨 **BATAS WAKTU SELESAI (${formattedDeadline} WIB)** 🚨\n${groupName}…. kuota belum tuntas!👿💥`;
+    color = 0xef4444;
   }
 
   const payload = {
@@ -345,9 +334,9 @@ export async function sendDiscordIncompleteWarning(
         color,
         fields: [
           { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
-          { name: '⏰ Batas Waktu (Deadline)', value: `\`${deadlineTime} WIB\``, inline: true },
-          { name: '🎯 Status Target', value: `**${completedCount} / ${targetCount} Akun** (${remainingNeeded} Belum)`, inline: true },
-          { name: `❌ Akun yang Belum Upload (${remainingNeeded} Lagi Menuju Target)`, value: missingList + moreText, inline: false }
+          { name: '⏰ Batas Waktu Report', value: `\`${formattedDeadline} WIB\``, inline: true },
+          { name: '🎯 Status Kuota Harian', value: `**${completedCount} / ${targetCount} Akun** (${remainingNeeded} Belum Selesai)`, inline: true },
+          { name: `❌ Akun yang Belum Upload (${effectiveMissing.length} Akun)`, value: missingList + moreText, inline: false }
         ],
         footer: {
           text: 'VCStudios • Daily Target Reminder',
