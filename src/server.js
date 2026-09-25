@@ -10,7 +10,8 @@ import {
   sendDiscordDailyReport,
   sendDiscordTestPing,
   getWebhooksForEvent,
-  WEBHOOK_EVENTS
+  WEBHOOK_EVENTS,
+  lastWebhookError
 } from './notifier.js';
 import {
   getFullConfig,
@@ -488,7 +489,13 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           group = config.groups[0];
         }
 
-        const testUrl = body.webhookUrl || group?.webhooks?.[0]?.url || group?.webhookUrl;
+        let rawTestUrl = body.webhookUrl || group?.webhooks?.[0]?.url || group?.webhookUrl;
+        if (typeof rawTestUrl === 'string') {
+          try {
+            rawTestUrl = decodeURIComponent(rawTestUrl.trim());
+          } catch {}
+        }
+        const testUrl = (rawTestUrl || '').trim();
 
         if (!testUrl) {
           sendJson({ success: false, error: 'Grup atau Webhook URL belum diisi' }, 400);
@@ -521,9 +528,16 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           const username = body.username || group?.accounts?.[0];
           if (username) {
             addLog(`Menjalankan tes webhook grup "${group?.name || 'Test'}" untuk @${username}...`, 'info');
-            const result = await getTikTokUserVideos(username);
-            if (result.success && result.videos && result.videos.length > 0) {
-              sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+            // Check memory cache first for immediate response
+            const cached = runtimeState.accountCache?.[username.toLowerCase()];
+            if (cached && cached.videos && cached.videos.length > 0) {
+              sent = await sendDiscordNotification(testUrl, cached.user, cached.videos[0], group?.name || 'Tes Webhook');
+            }
+            if (!sent) {
+              const result = await getTikTokUserVideos(username);
+              if (result.success && result.videos && result.videos.length > 0) {
+                sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+              }
             }
           }
 
@@ -538,8 +552,9 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           addLog(`✅ Notifikasi tes berhasil dikirim ke webhook "${group?.name || 'Discord'}"!`, 'success');
           sendJson({ success: true, message: `Notifikasi berhasil dikirim ke webhook ${group?.name || 'Discord'}` });
         } else {
-          addLog(`❌ Gagal mengirim webhook Discord untuk grup "${group?.name || 'Discord'}"`, 'error');
-          sendJson({ success: false, message: 'Gagal mengirim ke Discord. Periksa URL webhook Anda.' }, 500);
+          const failReason = lastWebhookError || 'Discord menolak pengiriman webhook atau batas request terlampaui.';
+          addLog(`❌ Gagal mengirim webhook Discord untuk grup "${group?.name || 'Discord'}": ${failReason}`, 'error');
+          sendJson({ success: false, message: failReason, error: failReason }, 500);
         }
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);

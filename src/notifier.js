@@ -58,28 +58,65 @@ export function getWebhooksForEvent(target, eventType) {
   return urls;
 }
 
+export let lastWebhookError = '';
+
 /**
  * Send a Discord payload to a list of webhook URLs
  */
 async function dispatchDiscordPayload(urls, payload, eventName = 'Notifikasi') {
-  if (!urls || urls.length === 0) return false;
+  if (!urls || urls.length === 0) {
+    lastWebhookError = 'Tidak ada URL webhook Discord tujuan yang valid';
+    return false;
+  }
   let successCount = 0;
-  for (const url of urls) {
+  lastWebhookError = '';
+
+  for (const rawUrl of urls) {
+    const url = (rawUrl || '').trim();
+    if (!url) continue;
+
     try {
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(10000)
       });
+
+      // Handle Discord 429 Rate Limiting with automatic backoff retry
+      if (res.status === 429) {
+        try {
+          const rateData = await res.json().catch(() => ({}));
+          const waitMs = Math.min(5000, Math.ceil((rateData.retry_after || 1.5) * 1000) + 100);
+          console.warn(`[Notifier] Webhook rate-limited (429) pada ${url}. Menunggu ${waitMs}ms lalu mencoba ulang...`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000)
+          });
+        } catch {}
+      }
+
       if (res.ok) {
         successCount++;
       } else {
         const errText = await res.text();
         console.error(`[Notifier] Webhook failed (${res.status}) on ${url}:`, errText);
+        if (res.status === 429) {
+          lastWebhookError = 'Discord membatasi frekuensi pesan (Rate Limit / 429). Mohon tunggu beberapa detik lalu coba lagi.';
+        } else if (res.status === 404) {
+          lastWebhookError = 'Webhook tidak ditemukan di Discord (404 Not Found). Webhook mungkin sudah dihapus dari channel Discord Anda.';
+        } else if (res.status === 401 || res.status === 403) {
+          lastWebhookError = 'Akses webhook ditolak oleh Discord (Token webhook tidak valid / 401 Unauthorized).';
+        } else {
+          lastWebhookError = `Discord menolak webhook (Status ${res.status}): ${errText.slice(0, 100)}`;
+        }
       }
     } catch (err) {
       console.error(`[Notifier] Error dispatching ${eventName} to ${url}:`, err.message);
+      lastWebhookError = `Gagal menghubungi server Discord: ${err.message}`;
     }
   }
   return successCount > 0;
@@ -241,8 +278,18 @@ export async function sendDiscordIncompleteWarning(
   // If 14 or more accounts have uploaded and not a test run -> Do not send warning!
   if (!isTest && completedCount >= targetCount) return false;
 
-  const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
-  if (urls.length === 0) return false;
+  let urls = typeof target === 'string'
+    ? [target.trim()]
+    : getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
+
+  if (urls.length === 0 && isTest) {
+    if (target?.url) urls = [target.url.trim()];
+    else if (target?.webhookUrl) urls = [target.webhookUrl.trim()];
+  }
+  if (urls.length === 0) {
+    lastWebhookError = 'Tidak ada webhook yang aktif untuk menerima peringatan task';
+    return false;
+  }
 
   const effectiveCompleted = isTest && completedCount >= targetCount ? Math.max(0, targetCount - 2) : completedCount;
   const remainingNeeded = Math.max(1, targetCount - effectiveCompleted);
@@ -361,10 +408,26 @@ export async function sendDiscordDailyReport(target, groupName, report) {
  * Send Test Ping to Discord Webhook
  */
 export async function sendDiscordTestPing(target, groupName = 'Grup') {
-  const urls = typeof target === 'string'
-    ? [target]
-    : getWebhooksForEvent(target, WEBHOOK_EVENTS.NEW_VIDEO);
-  if (urls.length === 0) return false;
+  let urls = [];
+  if (typeof target === 'string') {
+    const trimmed = target.trim();
+    if (trimmed) urls = [trimmed];
+  } else if (Array.isArray(target)) {
+    urls = target.map((t) => (typeof t === 'string' ? t.trim() : t?.url?.trim())).filter(Boolean);
+  } else if (typeof target === 'object' && target !== null) {
+    if (target.url) {
+      urls = [target.url.trim()];
+    } else if (Array.isArray(target.webhooks) && target.webhooks.length > 0) {
+      urls = target.webhooks.map((w) => (typeof w === 'string' ? w.trim() : w?.url?.trim())).filter(Boolean);
+    } else if (target.webhookUrl) {
+      urls = [target.webhookUrl.trim()];
+    }
+  }
+
+  if (urls.length === 0) {
+    lastWebhookError = 'URL webhook Discord tidak ditemukan atau kosong';
+    return false;
+  }
 
   const payload = {
     username: 'VCStudios Bot',
