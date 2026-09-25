@@ -7,9 +7,12 @@ import {
   writeLocalCache,
   loadAccountCacheFromDb,
   saveAccountCacheToDb,
-  seedSentVideosFromCache
+  seedSentVideosFromCache,
+  hasVideoBeenSent,
+  markVideoAsSent
 } from './db.js';
 import {
+  sendDiscordNotification,
   sendDiscordWarningNotification,
   sendDiscordDoubleUploadWarning,
   sendDiscordIncompleteWarning
@@ -175,6 +178,34 @@ export async function runPoll(isManual = false) {
       if (i + BATCH_CONCURRENCY < queue.length) {
         const jitter = Math.floor(Math.random() * 300) + 100;
         await new Promise((res) => setTimeout(res, delayBetweenBatchesMs + jitter));
+      }
+    }
+
+    // Safety reconciliation: Ensure every video from today present in accountCache has had its webhook sent to Discord!
+    for (const group of groups) {
+      for (const account of group.accounts || []) {
+        const cleanUser = account.toLowerCase();
+        const cached = runtimeState.accountCache[cleanUser];
+        if (!cached || !cached.recentVideos) continue;
+
+        for (const v of cached.recentVideos) {
+          if (!v || !v.id || !v.createTime) continue;
+          if (v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB) {
+            const alreadySent = await hasVideoBeenSent(cleanUser, v.id);
+            if (!alreadySent) {
+              console.log(`[Auto-Reconcile] Mengirim webhook video hari ini untuk @${cleanUser} (ID: ${v.id})...`);
+              const ok = await sendDiscordNotification(group, cached.user, v, group.name || group.id);
+              if (ok) {
+                await markVideoAsSent(cleanUser, v.id);
+                v.webhookSent = true;
+                v.sentAt = Date.now();
+                saveAccountCacheToDb(cleanUser, cached).catch(() => {});
+                addLog(`✅ Auto-reconcile berhasil mengirim webhook untuk @${cleanUser} (ID: ${v.id})`, 'success');
+                await new Promise((r) => setTimeout(r, 600));
+              }
+            }
+          }
+        }
       }
     }
 
