@@ -305,19 +305,18 @@ export async function sendDiscordIncompleteWarning(
 
   const formattedDeadline = (deadlineTime || '22:00').replace(':', '.');
 
-  let title = '‼️🚨REMINDER🚨‼️';
-  let description = `**${groupName}**…. upload TikToknyaaa!!!\nbatas kirim report jam **${formattedDeadline} WIB**👿💥`;
-  let content = `@everyone\n‼️🚨REMINDER🚨‼️\n${groupName}…. upload TikToknyaaa!!!\nbatas kirim report jam ${formattedDeadline} WIB👿💥`;
-  let color = 0xfe2c55; // TikTok Signature Alert Red
+  const content = `@everyone\n‼️🚨REMINDER🚨‼️\n${groupName}…. upload TikToknyaaa!!!\nbatas kirim report jam ${formattedDeadline} WIB👿💥`;
+  const color = reminderType === '10_min_reminder' ? 0xff0033 : 0xfe2c55;
+
+  let title = '📊 Detail Progres Target Harian';
+  let description = undefined;
 
   if (reminderType === '10_min_reminder') {
-    title = `‼️🚨REMINDER (${reminderMinutes} MENIT LAGI)🚨‼️`;
-    description = `**${groupName}**…. upload TikToknyaaa!!!\n🚨 **${reminderMinutes} Menit Menuju Deadline!** Batas kirim report jam **${formattedDeadline} WIB**👿💥`;
+    title = `⏰ PERINGATAN TERAKHIR (${reminderMinutes} MENIT LAGI)`;
+    description = `⚠️ Batas waktu kirim report akan berakhir dalam **${reminderMinutes} menit lagi** (pukul **${formattedDeadline} WIB**)!`;
   } else if (reminderType === 'deadline_reached') {
-    title = '🚨 BATAS WAKTU SELESAI 🚨';
-    description = `**${groupName}**…. batas kirim report jam **${formattedDeadline} WIB** telah berakhir! Target kuota belum tercapai.👿💥`;
-    content = `@everyone\n🚨 **BATAS WAKTU SELESAI (${formattedDeadline} WIB)** 🚨\n${groupName}…. kuota belum tuntas!👿💥`;
-    color = 0xef4444;
+    title = '🚨 BATAS WAKTU SELESAI';
+    description = `Batas waktu pengiriman report telah berakhir pada pukul **${formattedDeadline} WIB**.`;
   }
 
   const payload = {
@@ -415,8 +414,8 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
     },
     embeds: [
       {
-        title: `🎉 TARGET SELESAI: ${groupName.toUpperCase()} 🎉`,
-        description: `Target kuota harian grup **${groupName}** telah **100% LENGKAP TERCAPAI**!\nSemua target minimal **1 video di ${targetCount} akun** telah terpenuhi sebelum batas report jam **${formattedDeadline} WIB**. 🚀🔥`,
+        title: '📊 Rincian Penyelesaian Kuota Harian',
+        description: `Semua target minimal **1 video di ${targetCount} akun** telah terpenuhi sebelum batas report jam **${formattedDeadline} WIB**. 🚀🔥`,
         color: 0x00ff88, // Radiant Neon Green
         fields: [
           { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
