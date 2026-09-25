@@ -491,13 +491,17 @@ export async function sendDiscordTaskCompletedNotification(
     return false;
   }
 
-  const { deadlineTime = '22:00' } = options;
+  const { deadlineTime = '22:00', reportUrl = '' } = options;
   const formattedDeadline = (deadlineTime || '22:00').replace(':', '.');
+
+  const reportLinkSection = reportUrl
+    ? `\n\n📋 **Link Laporan Lengkap (Bisa di-copy):**\n${reportUrl}`
+    : '';
 
   const content = `@everyone
 🎉✅ **TARGET KUOTA HARIAN SELESAI!** ✅🎉
 Alhamdulillah, task upload TikTok grup **${groupName}** hari ini SUDAH TUNTAS! (**${completedCount}/${targetCount} Akun**)
-Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
+Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥${reportLinkSection}`;
 
   const topUploaded = (uploadedAccounts || []).slice(0, 14);
   const uploadedList = topUploaded.map((u, i) => {
@@ -525,6 +529,11 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
           { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
           { name: '🎯 Pencapaian Target', value: `✅ **${completedCount} / ${targetCount} Akun** (100%)`, inline: true },
           { name: '⏰ Batas Waktu Report', value: `\`${formattedDeadline} WIB\``, inline: true },
+          ...(reportUrl ? [{
+            name: '📋 Link Laporan Lengkap (Salin / Buka)',
+            value: `[🌐 Buka Laporan Interaktif Web](${reportUrl})\n\`${reportUrl}\``,
+            inline: false
+          }] : []),
           { name: `✨ Akun yang Telah Selesai Mengunggah (${completedCount} Akun)`, value: uploadedList + extraText, inline: false }
         ],
         footer: {

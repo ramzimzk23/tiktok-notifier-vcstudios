@@ -1,5 +1,5 @@
 import { checkAccount } from './tracker.js';
-import { createWebServer, addLog, runtimeState, generateDailyReportData } from './server.js';
+import { createWebServer, addLog, runtimeState, generateDailyReportData, getReportUrl } from './server.js';
 import {
   getFullConfig,
   isUsingSupabase,
@@ -288,6 +288,7 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
         if (!dailyAlertsTracker.completedAlerts.has(groupKey)) {
           dailyAlertsTracker.completedAlerts.add(groupKey);
           addLog(`🎉 TARGET TUNTAS! Grup "${group.name}" telah menyelesaikan kuota (${report.uploadedCount}/${targetCount} akun). Mengirim notifikasi selesai ke Discord...`, 'success');
+          const reportUrl = getReportUrl(group.id, 0);
           await sendDiscordTaskCompletedNotification(
             group,
             group.name,
@@ -295,7 +296,8 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
             targetCount,
             report.uploaded,
             {
-              deadlineTime: deadlineStr
+              deadlineTime: deadlineStr,
+              reportUrl
             }
           );
         }

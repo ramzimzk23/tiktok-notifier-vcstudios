@@ -208,6 +208,19 @@ export function generateDailyReportData(group, accountCache = {}, offsetDays = 0
   };
 }
 
+/**
+ * Generate accessible public URL for the interactive daily report page
+ */
+export function getReportUrl(groupId = '', offsetDays = 0) {
+  const base = process.env.APP_URL || runtimeState.baseUrl || `http://localhost:${process.env.PORT || 3000}`;
+  const cleanBase = base.replace(/\/+$/, '');
+  const params = [];
+  if (groupId) params.push(`group=${encodeURIComponent(groupId)}`);
+  if (offsetDays !== 0) params.push(`offset=${offsetDays}`);
+  const query = params.length > 0 ? `?${params.join('&')}` : '';
+  return `${cleanBase}/report${query}`;
+}
+
 // In-Memory Login Rate Limiting (Brute-Force Protection)
 const loginAttemptTracker = new Map();
 
@@ -253,6 +266,13 @@ function recordLoginAttempt(ip, success) {
 
 export function createWebServer(port = 3000, triggerPollCallback = null) {
   const server = http.createServer(async (req, res) => {
+    // Dynamically capture the public host so generated report URLs are always accessible
+    if (req.headers.host && !process.env.APP_URL) {
+      const proto = req.headers['x-forwarded-proto'] || (req.connection?.encrypted ? 'https' : 'http');
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      runtimeState.baseUrl = `${proto}://${host}`;
+    }
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     const pathname = url.pathname;
 
@@ -990,6 +1010,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         let sent = false;
 
         if (reminderType === 'completed') {
+          const reportUrl = getReportUrl(group.id, 0);
           sent = await sendDiscordTaskCompletedNotification(
             group,
             group.name,
@@ -997,7 +1018,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
             report.target,
             report.uploaded,
             {
-              deadlineTime: group.taskDeadline || '22:00'
+              deadlineTime: group.taskDeadline || '22:00',
+              reportUrl
             }
           );
         } else {
