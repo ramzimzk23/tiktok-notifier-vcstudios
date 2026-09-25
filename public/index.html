@@ -577,82 +577,96 @@
     </main>
   </div>
 
-  <!-- Group Modal (Create / Edit) -->
+  <!-- Group Modal (Create / Edit - Compact Split Layout) -->
   <div class="modal-overlay" id="group-modal">
-    <div class="modal-card">
+    <div class="modal-card modal-card-wide">
       <div class="modal-header">
-        <h3 class="modal-title" id="group-modal-title">Buat Grup Channel Baru</h3>
-        <button class="modal-close" id="btn-close-group-modal">&times;</button>
+        <div class="modal-header-info">
+          <h3 class="modal-title" id="group-modal-title">Buat Grup Channel Baru</h3>
+          <span class="modal-subtitle">Konfigurasi nama saluran, integrasi webhook Discord, dan jadwal peringatan target</span>
+        </div>
+        <button type="button" class="modal-close" id="btn-close-group-modal" title="Tutup">&times;</button>
       </div>
       <form id="form-group" class="modal-form">
         <div class="modal-body">
           <input type="hidden" id="group-modal-id">
-          <div class="form-group">
-            <label for="group-modal-name">Nama Grup</label>
-            <input type="text" id="group-modal-name" class="form-input" required placeholder="Contoh: Gaming Feed / Entertainment">
-            <small class="form-help">Nama grup yang akan muncul sebagai tag di notifikasi Discord.</small>
-          </div>
 
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="margin: 0; font-weight: 700;">Daftar Webhook Discord & Filter Notifikasi</label>
-              <button type="button" class="btn btn-xs btn-outline" id="btn-add-modal-webhook" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan); gap: 4px;">
-                <span>+ Tambah Webhook</span>
-              </button>
-            </div>
-            <small class="form-help" style="margin-bottom: 12px; display: block;">
-              Anda dapat menambahkan lebih dari 1 webhook dan mengatur tipe notifikasi untuk masing-masing webhook (misal: webhook khusus peringatan task / target).
-            </small>
-
-            <div id="modal-webhooks-container" class="modal-webhooks-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 4px;">
-              <!-- Dynamic Webhook Items Injected by JS -->
-            </div>
-          </div>
-
-          <!-- Task Deadline & Periodic Reminder Settings -->
-          <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="margin: 0; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
-                <span>⏰ Pengaturan Peringatan Berkala & Batas Waktu</span>
-              </label>
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.78rem; color: var(--text-secondary);">
-                <input type="checkbox" id="group-modal-reminder-enabled" checked style="accent-color: #f59e0b; cursor: pointer;">
-                <span>Aktifkan Peringatan</span>
-              </label>
-            </div>
-            <small class="form-help" style="margin-bottom: 12px; display: block;">
-              Atur berapa menit sekali peringatan otomatis dikirim ke webhook jika target 14 akun belum selesai, serta 1x peringatan 10 menit sebelum deadline.
-            </small>
-
-            <div class="deadline-inputs-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 10px;">
-              <div>
-                <label for="group-modal-warning-interval" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-                  Kirim Peringatan Setiap (Menit):
+          <div class="modal-split-grid">
+            <!-- PANEL KIRI: INFO DASAR & PENGATURAN TARGET -->
+            <div class="modal-left-col">
+              <!-- Nama Grup -->
+              <div class="compact-card">
+                <label class="compact-label" for="group-modal-name">
+                  <span>Nama Grup Saluran</span>
+                  <span class="text-danger">*</span>
                 </label>
-                <input type="number" id="group-modal-warning-interval" class="form-input" value="60" min="5" max="720" required placeholder="Misal: 60">
-                <small style="font-size: 0.7rem; color: var(--text-muted);">Contoh: 60 = tiap 1 jam, 30 = tiap 30 mnt</small>
+                <input type="text" id="group-modal-name" class="form-input form-input-compact" required placeholder="Contoh: Gaming Feed / Clippers Utama">
+                <span class="compact-hint">Tag judul pada notifikasi Discord.</span>
               </div>
-              <div>
-                <label for="group-modal-deadline" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-                  Batas Waktu Selesai (WIB):
-                </label>
-                <input type="time" id="group-modal-deadline" class="form-input" value="22:00" required style="font-family: var(--font-mono);">
-                <small style="font-size: 0.7rem; color: var(--text-muted);">Target 14 akun harus selesai</small>
+
+              <!-- Jadwal Target & Peringatan Berkala -->
+              <div class="compact-card compact-card-highlight">
+                <div class="compact-card-title-row">
+                  <div class="compact-title-with-icon">
+                    <span class="compact-icon">⏰</span>
+                    <strong>Batas Waktu & Reminder</strong>
+                  </div>
+                  <label class="toggle-pill-label">
+                    <input type="checkbox" id="group-modal-reminder-enabled" checked>
+                    <span class="toggle-pill-track"></span>
+                    <span class="toggle-pill-text">Aktif</span>
+                  </label>
+                </div>
+
+                <div class="compact-input-row">
+                  <div class="compact-input-col">
+                    <label class="compact-sublabel" for="group-modal-deadline">Batas Waktu (WIB)</label>
+                    <input type="time" id="group-modal-deadline" class="form-input form-input-compact font-mono" value="22:00" required>
+                  </div>
+                  <div class="compact-input-col">
+                    <label class="compact-sublabel" for="group-modal-warning-interval">Ulangi Tiap (Menit)</label>
+                    <input type="number" id="group-modal-warning-interval" class="form-input form-input-compact" value="60" min="5" max="720" required placeholder="60">
+                  </div>
+                </div>
+
+                <div class="compact-check-banner">
+                  <label class="compact-checkbox">
+                    <input type="checkbox" id="group-modal-reminder-10m" checked>
+                    <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum deadline</span>
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
-              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.78rem; color: #fff;">
-                <input type="checkbox" id="group-modal-reminder-10m" checked style="accent-color: #f59e0b; cursor: pointer;">
-                <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum batas waktu</span>
-              </label>
+            <!-- PANEL KANAN: DAFTAR WEBHOOK DISCORD DENGAN EVENT CHIPS -->
+            <div class="modal-right-col">
+              <div class="webhooks-panel-header">
+                <div>
+                  <h4 class="webhooks-panel-title">Webhook Discord</h4>
+                  <span class="webhooks-panel-desc">Tentukan tujuan notifikasi dan filter event</span>
+                </div>
+                <button type="button" class="btn btn-xs btn-outline" id="btn-add-modal-webhook" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan); gap: 4px;">
+                  <span>+ Tambah Webhook</span>
+                </button>
+              </div>
+
+              <div id="modal-webhooks-container" class="compact-webhooks-list">
+                <!-- Dynamic Webhook Items Injected by JS -->
+              </div>
             </div>
           </div>
         </div>
 
         <div class="modal-actions">
           <button type="button" class="btn btn-glass" id="btn-cancel-group">Batal</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-group">Simpan Grup</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-group">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span>Simpan Grup</span>
+          </button>
         </div>
       </form>
     </div>

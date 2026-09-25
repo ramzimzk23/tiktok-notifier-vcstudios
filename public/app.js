@@ -1330,62 +1330,63 @@ function renderModalWebhooks() {
     const isAccountNotFound = events.includes('account_not_found');
 
     return `
-      <div class="webhook-config-card" data-idx="${idx}">
-        <div class="webhook-card-header">
-          <span class="webhook-card-title">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+      <div class="wh-compact-card" data-idx="${idx}">
+        <div class="wh-card-topbar">
+          <div class="wh-label-badge">
+            <svg class="wh-svg-icon" viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
             </svg>
-            ${escapeHtml(wh.name || `Webhook #${idx + 1}`)}
-          </span>
-          <div class="webhook-card-actions">
+            <input type="text" class="wh-inline-name-input" placeholder="Label Webhook (misal: Khusus Peringatan)" value="${escapeHtml(wh.name || '')}" oninput="updateModalWebhookField(${idx}, 'name', this.value)">
+          </div>
+          <div class="wh-card-actions">
             ${wh.url ? `
-              <button type="button" class="btn btn-xs btn-outline" style="font-size: 0.7rem; padding: 2px 7px;" onclick="testModalWebhook(${idx})">
-                🧪 Tes
+              <button type="button" class="btn-wh-action btn-wh-test" onclick="testModalWebhook(${idx})" title="Tes Webhook Ini">
+                <span>🧪 Tes</span>
               </button>
             ` : ''}
             ${modalWebhooks.length > 1 ? `
-              <button type="button" class="btn btn-xs btn-outline" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.7rem; padding: 2px 7px;" onclick="removeModalWebhook(${idx})">
-                🗑️ Hapus
+              <button type="button" class="btn-wh-action btn-wh-delete" onclick="removeModalWebhook(${idx})" title="Hapus Webhook">
+                <span>✕</span>
               </button>
             ` : ''}
           </div>
         </div>
 
-        <div class="webhook-card-fields">
-          <input type="text" class="form-input webhook-name-input" placeholder="Label / Nama Webhook (misal: Khusus Task Warning)" value="${escapeHtml(wh.name || '')}" oninput="updateModalWebhookField(${idx}, 'name', this.value)">
-          <input type="url" class="form-input webhook-url-input" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(wh.url || '')}" oninput="updateModalWebhookField(${idx}, 'url', this.value)" required>
+        <div class="wh-url-field-wrap">
+          <input type="url" class="wh-url-input-compact" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(wh.url || '')}" oninput="updateModalWebhookField(${idx}, 'url', this.value)" required>
         </div>
 
-        <div class="webhook-preset-bar">
-          <span class="webhook-preset-label">Preset:</span>
-          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'all')">⚡ Semua</button>
-          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'task_only')">⚠️ Khusus Task & Warning</button>
-          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'video_only')">🎬 Khusus Video</button>
-          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'report_only')">📊 Khusus Report</button>
-        </div>
+        <div class="wh-events-toolbar">
+          <div class="wh-presets-strip">
+            <span class="wh-preset-label">Preset:</span>
+            <button type="button" class="wh-preset-btn" onclick="applyWebhookPreset(${idx}, 'all')">Semua</button>
+            <button type="button" class="wh-preset-btn" onclick="applyWebhookPreset(${idx}, 'task_only')">⚠️ Khusus Peringatan</button>
+            <button type="button" class="wh-preset-btn" onclick="applyWebhookPreset(${idx}, 'video_only')">🎬 Video</button>
+            <button type="button" class="wh-preset-btn" onclick="applyWebhookPreset(${idx}, 'report_only')">📊 Report</button>
+          </div>
 
-        <div class="webhook-events-grid">
-          <label class="webhook-event-checkbox-label">
-            <input type="checkbox" ${isTaskWarning ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'task_warning', this.checked)">
-            <span>⚠️ Target Belum Tuntas</span>
-          </label>
-          <label class="webhook-event-checkbox-label">
-            <input type="checkbox" ${isNewVideo ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'new_video', this.checked)">
-            <span>🎬 Video Baru</span>
-          </label>
-          <label class="webhook-event-checkbox-label">
-            <input type="checkbox" ${isDoubleUpload ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'double_upload', this.checked)">
-            <span>🔁 Double Upload</span>
-          </label>
-          <label class="webhook-event-checkbox-label">
-            <input type="checkbox" ${isDailyReport ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'daily_report', this.checked)">
-            <span>📊 Daily Report</span>
-          </label>
-          <label class="webhook-event-checkbox-label">
-            <input type="checkbox" ${isAccountNotFound ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'account_not_found', this.checked)">
-            <span>🔍 Akun Tidak Ada</span>
-          </label>
+          <div class="wh-chips-group">
+            <button type="button" class="wh-chip-item ${isTaskWarning ? 'chip-active chip-task' : ''}" onclick="toggleModalWebhookEvent(${idx}, 'task_warning', !${isTaskWarning})">
+              <span class="chip-dot"></span>
+              <span>⚠️ Target Belum Tuntas</span>
+            </button>
+            <button type="button" class="wh-chip-item ${isNewVideo ? 'chip-active chip-video' : ''}" onclick="toggleModalWebhookEvent(${idx}, 'new_video', !${isNewVideo})">
+              <span class="chip-dot"></span>
+              <span>🎬 Video Baru</span>
+            </button>
+            <button type="button" class="wh-chip-item ${isDoubleUpload ? 'chip-active chip-double' : ''}" onclick="toggleModalWebhookEvent(${idx}, 'double_upload', !${isDoubleUpload})">
+              <span class="chip-dot"></span>
+              <span>🔁 Double Upload</span>
+            </button>
+            <button type="button" class="wh-chip-item ${isDailyReport ? 'chip-active chip-report' : ''}" onclick="toggleModalWebhookEvent(${idx}, 'daily_report', !${isDailyReport})">
+              <span class="chip-dot"></span>
+              <span>📊 Daily Report</span>
+            </button>
+            <button type="button" class="wh-chip-item ${isAccountNotFound ? 'chip-active chip-invalid' : ''}" onclick="toggleModalWebhookEvent(${idx}, 'account_not_found', !${isAccountNotFound})">
+              <span class="chip-dot"></span>
+              <span>🔍 Akun Typo</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -1401,7 +1402,7 @@ function applyWebhookPreset(idx, type) {
   } else if (type === 'task_only') {
     modalWebhooks[idx].events = ['task_warning', 'double_upload', 'account_not_found'];
     if (!modalWebhooks[idx].name || modalWebhooks[idx].name === 'Semua Notifikasi') {
-      modalWebhooks[idx].name = 'Khusus Task & Warning';
+      modalWebhooks[idx].name = 'Khusus Peringatan';
     }
   } else if (type === 'video_only') {
     modalWebhooks[idx].events = ['new_video'];
@@ -1430,6 +1431,7 @@ function toggleModalWebhookEvent(idx, eventKey, isChecked) {
   } else {
     modalWebhooks[idx].events = modalWebhooks[idx].events.filter((e) => e !== eventKey);
   }
+  renderModalWebhooks();
 }
 window.toggleModalWebhookEvent = toggleModalWebhookEvent;
 
