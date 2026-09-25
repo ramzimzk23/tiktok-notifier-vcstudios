@@ -286,10 +286,9 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
 
       if (isGroupFinished) {
         if (!dailyAlertsTracker.completedAlerts.has(groupKey)) {
-          dailyAlertsTracker.completedAlerts.add(groupKey);
           addLog(`🎉 TARGET TUNTAS! Grup "${group.name}" telah menyelesaikan kuota (${report.uploadedCount}/${targetCount} akun). Mengirim notifikasi selesai ke Discord...`, 'success');
           const reportUrl = getReportUrl(group.id, 0);
-          await sendDiscordTaskCompletedNotification(
+          const sent = await sendDiscordTaskCompletedNotification(
             group,
             group.name,
             report.uploadedCount,
@@ -300,6 +299,12 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
               reportUrl
             }
           );
+          if (sent) {
+            dailyAlertsTracker.completedAlerts.add(groupKey);
+            addLog(`✅ Notifikasi selesai kuota berhasil dikirim ke Discord grup "${group.name}"!`, 'success');
+          } else {
+            addLog(`⚠️ Gagal mengirim notifikasi selesai ke Discord grup "${group.name}". Akan dicoba ulang pada siklus berikutnya.`, 'warn');
+          }
         }
         // JIKA SUDAH SELESAI: STOP! Jangan kirim reminder/peringatan apapun lagi untuk grup ini hari ini.
         continue;

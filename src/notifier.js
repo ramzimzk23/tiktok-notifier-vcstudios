@@ -221,6 +221,61 @@ async function dispatchDiscordPayload(targets, payloadOrBuilder, eventName = 'No
 }
 
 /**
+ * Safely format an array of item strings into one or more Discord embed fields
+ * so that no field value exceeds Discord's 1024-character maximum limit.
+ */
+function formatListToDiscordFields(title, items, isInline = false, maxCharsPerField = 850) {
+  if (!items || items.length === 0) {
+    return [{ name: title, value: '(Belum ada data)', inline: isInline }];
+  }
+
+  const fields = [];
+  let currentChunk = [];
+  let currentLength = 0;
+  let chunkStartIndex = 1;
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const itemLen = item.length + 1;
+
+    if (currentChunk.length > 0 && currentLength + itemLen > maxCharsPerField) {
+      const chunkEndIndex = chunkStartIndex + currentChunk.length - 1;
+      const fieldTitle = items.length === currentChunk.length
+        ? title
+        : `${title} (${chunkStartIndex}–${chunkEndIndex})`;
+
+      fields.push({
+        name: fieldTitle,
+        value: currentChunk.join('\n'),
+        inline: isInline
+      });
+
+      currentChunk = [];
+      currentLength = 0;
+      chunkStartIndex = i + 1;
+    }
+
+    currentChunk.push(item);
+    currentLength += itemLen;
+  }
+
+  if (currentChunk.length > 0) {
+    const chunkEndIndex = chunkStartIndex + currentChunk.length - 1;
+    const fieldTitle = fields.length === 0
+      ? title
+      : `${title} (${chunkStartIndex}–${chunkEndIndex})`;
+
+    fields.push({
+      name: fieldTitle,
+      value: currentChunk.join('\n'),
+      inline: isInline
+    });
+  }
+
+  return fields;
+}
+
+/**
  * Format and send a TikTok new video notification to Discord Webhook
  * @param {string|object|Array} target Discord Webhook URL, Webhooks array, or Group object
  * @param {object} user TikTok user info
@@ -392,8 +447,16 @@ export async function sendDiscordIncompleteWarning(
   const effectiveCompleted = isTest && completedCount >= targetCount ? Math.max(0, targetCount - 2) : completedCount;
   const remainingNeeded = Math.max(1, targetCount - effectiveCompleted);
   const effectiveMissing = (missingAccounts && missingAccounts.length > 0) ? missingAccounts : ['akun_clippers_sample_1', 'akun_clippers_sample_2'];
-  const missingList = effectiveMissing.slice(0, 14).map((acc, i) => `${i + 1}. @${acc}`).join('\n');
-  const moreText = effectiveMissing.length > 14 ? `\n... dan ${effectiveMissing.length - 14} akun lainnya` : '';
+  const missingItems = effectiveMissing.slice(0, 14).map((acc, i) => `${i + 1}. @${acc}`);
+  if (effectiveMissing.length > 14) {
+    missingItems.push(`*... dan ${effectiveMissing.length - 14} akun lainnya*`);
+  }
+  const missingFields = formatListToDiscordFields(
+    `❌ Akun yang Belum Upload (${effectiveMissing.length} Akun)`,
+    missingItems,
+    false,
+    850
+  );
 
   const {
     reminderType = 'standard', // '10_min_reminder' | 'deadline_reached' | 'standard'
@@ -433,7 +496,7 @@ export async function sendDiscordIncompleteWarning(
           { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
           { name: '⏰ Batas Waktu Report', value: `\`${formattedDeadline} WIB\``, inline: true },
           { name: '🎯 Status Kuota Harian', value: `**${completedCount} / ${targetCount} Akun** (${remainingNeeded} Belum Selesai)`, inline: true },
-          { name: `❌ Akun yang Belum Upload (${effectiveMissing.length} Akun)`, value: missingList + moreText, inline: false }
+          ...missingFields
         ],
         footer: {
           text: 'VCStudios • Daily Target Reminder',
@@ -504,14 +567,23 @@ Alhamdulillah, task upload TikTok grup **${groupName}** hari ini SUDAH TUNTAS! (
 Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥${reportLinkSection}`;
 
   const topUploaded = (uploadedAccounts || []).slice(0, 14);
-  const uploadedList = topUploaded.map((u, i) => {
+  const uploadedItems = topUploaded.map((u, i) => {
     const acc = typeof u === 'string' ? u : (u.account || u.nickname || 'akun');
     const url = u.videoUrl ? ` — [Tonton Video](${u.videoUrl})` : '';
     return `${i + 1}. **@${acc}**${url}`;
-  }).join('\n') || `• ${completedCount} akun telah berhasil mengunggah video.`;
+  });
 
   const extraCount = (uploadedAccounts || []).length > 14 ? (uploadedAccounts.length - 14) : 0;
-  const extraText = extraCount > 0 ? `\n*... dan ${extraCount} video tambahan lainnya*` : '';
+  if (extraCount > 0) {
+    uploadedItems.push(`*... dan ${extraCount} video tambahan lainnya*`);
+  }
+
+  const uploadedFields = formatListToDiscordFields(
+    `✨ Akun yang Telah Selesai Mengunggah (${completedCount} Akun)`,
+    uploadedItems,
+    false,
+    850
+  );
 
   const payload = {
     username: 'VCStudios Bot',
@@ -534,7 +606,7 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥${reportLinkSection}`;
             value: `[🌐 Buka Laporan Interaktif Web](${reportUrl})\n\`${reportUrl}\``,
             inline: false
           }] : []),
-          { name: `✨ Akun yang Telah Selesai Mengunggah (${completedCount} Akun)`, value: uploadedList + extraText, inline: false }
+          ...uploadedFields
         ],
         footer: {
           text: 'VCStudios • Daily Target Completed',
@@ -555,9 +627,20 @@ export async function sendDiscordDailyReport(target, groupName, report) {
   const targets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
   if (targets.length === 0) return false;
 
-  const uploadedList = (report.uploaded || []).map((u, i) => `${i + 1}. **@${u.account}** — [Tonton Video](${u.videoUrl})`).join('\n') || '(Belum ada akun upload hari ini)';
+  const uploadedItems = (report.uploaded || []).map((u, i) => `${i + 1}. **@${u.account}** — [Tonton Video](${u.videoUrl})`);
+  const uploadedFields = formatListToDiscordFields(
+    `✅ Sudah Upload (${report.uploadedCount} Akun)`,
+    uploadedItems,
+    false,
+    850
+  );
+
   const remainingNeeded = Math.max(0, (report.target || 14) - (report.uploadedCount || 0));
-  const missingList = (report.missing || []).slice(0, 14).map((m, i) => `${i + 1}. @${m}`).join('\n') || '🎉 Target 14 akun sudah tuntas!';
+  const missingItems = (report.missing || []).slice(0, 14).map((m, i) => `${i + 1}. @${m}`);
+  const missingFields = !report.isCompleted
+    ? formatListToDiscordFields(`❌ Belum Upload (${remainingNeeded} Akun Lagi Menuju Target)`, missingItems, false, 850)
+    : [];
+
   const doubleList = (report.doubles || []).map((d) => `• @${d.account} (${d.count} video hari ini)`).join('\n') || 'Tidak ada.';
 
   const payload = {
@@ -575,9 +658,9 @@ export async function sendDiscordDailyReport(target, groupName, report) {
         fields: [
           { name: '🎯 Status Pencapaian', value: `**${report.uploadedCount} / ${report.target} Akun Selesai** (${report.percentage}%)`, inline: true },
           { name: '⚡ Status', value: report.isCompleted ? '✅ SELESAI (14 Akun Tuntas)' : `⚠️ BELUM SELESAI (Kurang ${remainingNeeded} Akun)`, inline: true },
-          { name: `✅ Sudah Upload (${report.uploadedCount} Akun)`, value: uploadedList, inline: false },
-          ...(!report.isCompleted ? [{ name: `❌ Belum Upload (${remainingNeeded} Akun Lagi Menuju Target)`, value: missingList, inline: false }] : []),
-          ...(report.doubles.length > 0 ? [{ name: `⚠️ Double Upload (${report.doubles.length} Akun)`, value: doubleList, inline: false }] : [])
+          ...uploadedFields,
+          ...missingFields,
+          ...(report.doubles.length > 0 ? [{ name: `⚠️ Double Upload (${report.doubles.length} Akun)`, value: doubleList.slice(0, 1000), inline: false }] : [])
         ],
         footer: {
           text: 'VCStudios • Daily Report Generator',
