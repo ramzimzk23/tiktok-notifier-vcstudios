@@ -109,7 +109,8 @@ export async function runPoll(isManual = false) {
                 id: v.id,
                 createTime: v.createTime,
                 desc: v.desc || '',
-                url: v.url
+                url: v.url,
+                webhookSent: v.webhookSent === true
               })),
               lastUpdated: Date.now()
             };

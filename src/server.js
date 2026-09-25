@@ -115,7 +115,8 @@ export function generateDailyReportData(group, accountCache = {}, offsetDays = 0
           id: v.id,
           url: v.url || `https://www.tiktok.com/@${acc}/video/${v.id}`,
           createTime: v.createTime,
-          desc: v.desc || ''
+          desc: v.desc || '',
+          webhookSent: v.webhookSent === true
         }))
       });
 

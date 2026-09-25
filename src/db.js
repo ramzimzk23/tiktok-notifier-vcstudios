@@ -151,14 +151,22 @@ export async function loadSentVideos() {
 }
 
 /**
+ * Synchronous check if a video has already been posted to Discord webhook
+ */
+export function hasVideoBeenSentSync(username, videoId) {
+  if (!videoId) return false;
+  const vId = String(videoId);
+  const u = (username || '').replace(/^@/, '').toLowerCase();
+  return sentVideosSet.has(vId) || (u && sentVideosSet.has(`${u}:${vId}`));
+}
+
+/**
  * Check if a video has already been posted to Discord webhook
  */
 export async function hasVideoBeenSent(username, videoId) {
   if (!videoId) return false;
   if (!sentVideosLoaded) await loadSentVideos();
-  const vId = String(videoId);
-  const u = (username || '').replace(/^@/, '').toLowerCase();
-  return sentVideosSet.has(vId) || (u && sentVideosSet.has(`${u}:${vId}`));
+  return hasVideoBeenSentSync(username, videoId);
 }
 
 /**
@@ -181,11 +189,18 @@ export async function markVideoAsSent(username, videoId) {
 }
 
 /**
- * Pre-populate sent_videos with existing cached videos so they are never alerted as new
+ * Pre-populate sent_videos with existing cached videos so historical videos are never alerted as new.
+ * IMPORTANT: Only videos that are explicitly marked as webhookSent === true OR uploaded BEFORE today (WIB)
+ * are seeded as sent. Today's videos that have NOT been sent to Discord will NOT be seeded,
+ * allowing the tracker to reliably dispatch webhooks for them!
  */
 export async function seedSentVideosFromCache(cache) {
   if (!cache) return;
   if (!sentVideosLoaded) await loadSentVideos();
+
+  const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
+  const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
+
   let added = 0;
   for (const [user, data] of Object.entries(cache)) {
     const cleanUser = user.replace(/^@/, '').toLowerCase();
@@ -193,19 +208,25 @@ export async function seedSentVideosFromCache(cache) {
     for (const v of videos) {
       if (v && v.id) {
         const vId = String(v.id);
-        if (!sentVideosSet.has(vId)) {
-          sentVideosSet.add(vId);
-          sentVideosSet.add(`${cleanUser}:${vId}`);
-          added++;
+        const isHistorical = v.createTime && v.createTime < startOfDayWIB;
+        const explicitlySent = v.webhookSent === true;
+
+        if (isHistorical || explicitlySent) {
+          if (!sentVideosSet.has(vId)) {
+            sentVideosSet.add(vId);
+            sentVideosSet.add(`${cleanUser}:${vId}`);
+            added++;
+          }
         }
       }
     }
   }
+
   if (added > 0) {
     try {
       const arr = Array.from(sentVideosSet);
       await fs.writeFile(SENT_VIDEOS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
-      console.log(`[DB] Berhasil menginisialisasi ${sentVideosSet.size} riwayat video terkirim (anti-spam aktif).`);
+      console.log(`[DB] Berhasil menyinkronkan ${sentVideosSet.size} riwayat video terkirim (anti-spam aktif).`);
     } catch {}
   }
 }
@@ -232,19 +253,38 @@ export async function loadAccountCacheFromDb() {
             try {
               if (row.last_video_id.startsWith('[') || row.last_video_id.startsWith('{')) {
                 const parsed = JSON.parse(row.last_video_id);
-                videos = Array.isArray(parsed) ? parsed : [parsed];
+                const rawArr = Array.isArray(parsed) ? parsed : [parsed];
+                videos = rawArr.map((v) => {
+                  const vId = String(v.id || '');
+                  const isSent = v.webhookSent === true || hasVideoBeenSentSync(u, vId);
+                  if (isSent && vId) {
+                    sentVideosSet.add(vId);
+                    sentVideosSet.add(`${u}:${vId}`);
+                  }
+                  return {
+                    id: vId,
+                    createTime: Number(v.createTime) || 0,
+                    desc: v.desc || '',
+                    url: v.url || `https://www.tiktok.com/@${u}/video/${vId}`,
+                    webhookSent: isSent,
+                    sentAt: v.sentAt || null
+                  };
+                });
               } else {
+                const isSent = hasVideoBeenSentSync(u, row.last_video_id);
                 videos = [{
-                  id: row.last_video_id,
-                  createTime: row.last_post_time || 0,
-                  url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`
+                  id: String(row.last_video_id),
+                  createTime: Number(row.last_post_time) || 0,
+                  url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`,
+                  webhookSent: isSent
                 }];
               }
             } catch {
               videos = [{
-                id: row.last_video_id,
-                createTime: row.last_post_time || 0,
-                url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`
+                id: String(row.last_video_id),
+                createTime: Number(row.last_post_time) || 0,
+                url: `https://www.tiktok.com/@${u}/video/${row.last_video_id}`,
+                webhookSent: hasVideoBeenSentSync(u, row.last_video_id)
               }];
             }
           }
@@ -294,10 +334,23 @@ export async function saveAccountCacheToDb(username, cacheData) {
       const recentVideos = cacheData.recentVideos || (cacheData.latestVideo ? [cacheData.latestVideo] : []);
       const latestVideo = recentVideos[0] || null;
 
+      const mappedVideos = recentVideos.map(v => {
+        const vId = String(v.id || '');
+        const isSent = v.webhookSent === true || hasVideoBeenSentSync(cleanUser, vId);
+        return {
+          id: vId,
+          createTime: Number(v.createTime) || 0,
+          desc: v.desc || '',
+          url: v.url || `https://www.tiktok.com/@${cleanUser}/video/${vId}`,
+          webhookSent: isSent,
+          sentAt: v.sentAt || (isSent ? Date.now() : null)
+        };
+      });
+
       const payload = {
         nickname: cacheData.user?.nickname || cleanUser,
         avatar_url: cacheData.user?.avatar || '',
-        last_video_id: recentVideos.length > 0 ? JSON.stringify(recentVideos) : null,
+        last_video_id: mappedVideos.length > 0 ? JSON.stringify(mappedVideos) : null,
         last_post_time: latestVideo?.createTime || null,
         last_check_time: Date.now()
       };
