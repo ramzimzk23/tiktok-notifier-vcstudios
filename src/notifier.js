@@ -236,15 +236,19 @@ export async function sendDiscordIncompleteWarning(
   missingAccounts = [],
   options = {}
 ) {
-  // If 14 or more accounts have uploaded, target is COMPLETE -> Do not send warning!
-  if (completedCount >= targetCount) return false;
+  const isTest = Boolean(options.isTest);
+
+  // If 14 or more accounts have uploaded and not a test run -> Do not send warning!
+  if (!isTest && completedCount >= targetCount) return false;
 
   const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
   if (urls.length === 0) return false;
 
-  const remainingNeeded = Math.max(0, targetCount - completedCount);
-  const missingList = (missingAccounts || []).slice(0, 14).map((acc, i) => `${i + 1}. @${acc}`).join('\n') || 'Tidak ada.';
-  const moreText = (missingAccounts || []).length > 14 ? `\n... dan ${(missingAccounts || []).length - 14} akun lainnya` : '';
+  const effectiveCompleted = isTest && completedCount >= targetCount ? Math.max(0, targetCount - 2) : completedCount;
+  const remainingNeeded = Math.max(1, targetCount - effectiveCompleted);
+  const effectiveMissing = (missingAccounts && missingAccounts.length > 0) ? missingAccounts : ['akun_clippers_sample_1', 'akun_clippers_sample_2'];
+  const missingList = effectiveMissing.slice(0, 14).map((acc, i) => `${i + 1}. @${acc}`).join('\n');
+  const moreText = effectiveMissing.length > 14 ? `\n... dan ${effectiveMissing.length - 14} akun lainnya` : '';
 
   const {
     reminderType = 'standard', // '10_min_reminder' | 'deadline_reached' | 'standard'

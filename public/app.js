@@ -63,6 +63,24 @@ async function authFetch(url, options = {}) {
     throw new Error('Unauthorized');
   }
 
+  // Safe JSON wrapper to prevent "The string did not match the expected pattern" in WebKit/Safari
+  response.json = async () => {
+    try {
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return {
+          success: response.ok,
+          error: text || `HTTP ${response.status}`,
+          message: text || `HTTP ${response.status}`
+        };
+      }
+    } catch (e) {
+      return { success: false, error: e.message, message: e.message };
+    }
+  };
+
   return response;
 }
 
@@ -1249,22 +1267,39 @@ document.getElementById('form-add-account').addEventListener('submit', async (e)
 const ALL_EVENT_KEYS = ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'];
 let modalWebhooks = [];
 
-async function testSingleWebhook(groupId, encodedUrl) {
+async function testSingleWebhook(groupId, encodedUrl, passedEvents = null) {
   const webhookUrl = decodeURIComponent(encodedUrl || '');
   if (!webhookUrl) {
     showToast('URL Webhook tidak valid', true);
     return;
   }
+
+  let events = passedEvents;
+  if (!events && groupId && currentStatus?.config?.groups) {
+    const grp = currentStatus.config.groups.find((g) => g.id === groupId);
+    const whObj = grp?.webhooks?.find((w) => w.url === webhookUrl);
+    if (whObj?.events) {
+      events = whObj.events;
+    }
+  }
+
+  const isTaskOnly = Array.isArray(events) && events.includes('task_warning') && !events.includes('new_video');
+
   try {
-    showToast('Mengirim pesan tes ke webhook Discord...');
+    showToast(isTaskOnly ? 'Mengirim tes peringatan task ke webhook Discord...' : 'Mengirim pesan tes ke webhook Discord...');
     const res = await authFetch('/api/test-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groupId, webhookUrl })
+      body: JSON.stringify({
+        groupId,
+        webhookUrl,
+        events: Array.isArray(events) ? events : undefined,
+        isTaskWarningOnly: isTaskOnly
+      })
     });
     const data = await res.json();
     if (data.success) {
-      showToast('✅ Berhasil terkirim ke Discord!');
+      showToast(data.message || '✅ Berhasil terkirim ke Discord!');
     } else {
       showToast(`❌ Gagal: ${data.error || data.message}`, true);
     }
@@ -1418,7 +1453,7 @@ async function testModalWebhook(idx) {
     return;
   }
   const groupId = document.getElementById('group-modal-id')?.value || activeGroupId;
-  testSingleWebhook(groupId, encodeURIComponent(wh.url));
+  testSingleWebhook(groupId, encodeURIComponent(wh.url), wh.events);
 }
 window.testModalWebhook = testModalWebhook;
 
@@ -1566,13 +1601,13 @@ if (btnTestReminder) {
       const res = await authFetch('/api/daily-report/warn-incomplete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: group.id, reminderType: '10_min_reminder' })
+        body: JSON.stringify({ groupId: group.id, reminderType: '10_min_reminder', isTest: true })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('✅ Reminder task berhasil dikirim ke webhook Discord!');
+        showToast(data.message || '✅ Reminder task berhasil dikirim ke webhook Discord!');
       } else {
-        showToast(`❌ Gagal: ${data.error}`, true);
+        showToast(`❌ Gagal: ${data.error || data.message}`, true);
       }
     } catch (err) {
       showToast(err.message, true);
@@ -1980,11 +2015,13 @@ if (warnDiscordReportBtn) {
 
     try {
       const res = await authFetch(`/api/groups/${activeGroupId}/daily-report/warn-incomplete`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTest: true })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('⚠️ Peringatan target belum tuntas berhasil dikirim ke Discord (@everyone)!');
+        showToast(data.message || '⚠️ Peringatan target belum tuntas berhasil dikirim ke Discord (@everyone)!');
       } else {
         showToast(data.error || 'Gagal mengirim peringatan ke Discord', true);
       }

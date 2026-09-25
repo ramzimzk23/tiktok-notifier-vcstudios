@@ -8,7 +8,9 @@ import {
   sendDiscordDoubleUploadWarning,
   sendDiscordIncompleteWarning,
   sendDiscordDailyReport,
-  sendDiscordTestPing
+  sendDiscordTestPing,
+  getWebhooksForEvent,
+  WEBHOOK_EVENTS
 } from './notifier.js';
 import {
   getFullConfig,
@@ -492,21 +494,43 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        const username = body.username || group?.accounts?.[0];
+        const events = Array.isArray(body.events) ? body.events : null;
+        const isTaskWarningTest = body.eventType === 'task_warning' ||
+          Boolean(body.isTaskWarningOnly) ||
+          (events && events.includes('task_warning') && !events.includes('new_video'));
+
         let sent = false;
 
-        if (username) {
-          addLog(`Menjalankan tes webhook grup "${group?.name || 'Test'}" untuk @${username}...`, 'info');
-          const result = await getTikTokUserVideos(username);
-          if (result.success && result.videos && result.videos.length > 0) {
-            sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+        if (isTaskWarningTest) {
+          addLog(`Mengirim simulasi tes peringatan task ke webhook "${group?.name || 'Discord'}"...`, 'info');
+          sent = await sendDiscordIncompleteWarning(
+            testUrl,
+            group?.name || 'Grup Saluran',
+            12,
+            14,
+            ['akun_clippers_sample_1', 'akun_clippers_sample_2'],
+            {
+              reminderType: '10_min_reminder',
+              deadlineTime: group?.taskDeadline || '22:00',
+              reminderMinutes: group?.taskReminderMinutes || 10,
+              isTest: true
+            }
+          );
+        } else {
+          const username = body.username || group?.accounts?.[0];
+          if (username) {
+            addLog(`Menjalankan tes webhook grup "${group?.name || 'Test'}" untuk @${username}...`, 'info');
+            const result = await getTikTokUserVideos(username);
+            if (result.success && result.videos && result.videos.length > 0) {
+              sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+            }
           }
-        }
 
-        // If no username or video fetch failed, send direct test ping embed
-        if (!sent) {
-          addLog(`Mengirim pesan tes koneksi langsung ke webhook "${group?.name || 'Discord'}"...`, 'info');
-          sent = await sendDiscordTestPing(testUrl, group?.name || 'Tes Webhook');
+          // If no username or video fetch failed, send direct test ping embed
+          if (!sent) {
+            addLog(`Mengirim pesan tes koneksi langsung ke webhook "${group?.name || 'Discord'}"...`, 'info');
+            sent = await sendDiscordTestPing(testUrl, group?.name || 'Tes Webhook');
+          }
         }
 
         if (sent) {
@@ -893,26 +917,36 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       return;
     }
 
-    // 8e. POST /api/groups/:id/daily-report/warn-incomplete
-    if (pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/warn-incomplete$/) && req.method === 'POST') {
+    // 8e. POST /api/daily-report/warn-incomplete or /api/groups/:id/daily-report/warn-incomplete
+    if ((pathname === '/api/daily-report/warn-incomplete' || pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/warn-incomplete$/)) && req.method === 'POST') {
       try {
+        const body = await parseBody().catch(() => ({}));
         const match = pathname.match(/^\/api\/groups\/([^/]+)\/daily-report\/warn-incomplete$/);
-        const groupId = match[1];
+        const groupId = match ? match[1] : body.groupId;
+
         const config = await getFullConfig();
-        const group = config.groups.find((g) => g.id === groupId);
+        let group = config.groups.find((g) => g.id === groupId);
+        if (!group && !groupId && config.groups.length > 0) {
+          group = config.groups[0];
+        }
+
         if (!group) {
           sendJson({ success: false, error: 'Grup tidak ditemukan' }, 404);
           return;
         }
 
-        const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
-        if (!hasWebhooks) {
-          sendJson({ success: false, error: 'Discord webhook belum dikonfigurasi untuk grup ini' }, 400);
+        const taskWebhooks = getWebhooksForEvent(group, WEBHOOK_EVENTS.TASK_WARNING);
+        if (taskWebhooks.length === 0) {
+          sendJson({
+            success: false,
+            error: `Grup "${group.name}" belum memiliki webhook yang mencentang "Target Belum Tuntas". Silakan klik Edit Grup lalu centang "Target Belum Tuntas" pada webhook.`
+          }, 400);
           return;
         }
 
         const report = generateDailyReportData(group, runtimeState.accountCache);
         const reminderType = body.reminderType || '10_min_reminder';
+        const isTest = body.isTest !== false; // Pemanggilan manual via tombol dianggap tes/preview
         const sent = await sendDiscordIncompleteWarning(
           group,
           group.name,
@@ -922,17 +956,18 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           {
             reminderType,
             deadlineTime: group.taskDeadline || '22:00',
-            reminderMinutes: group.taskReminderMinutes || 10
+            reminderMinutes: group.taskReminderMinutes || 10,
+            isTest
           }
         );
 
         if (!sent) {
-          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook (periksa filter webhook)' }, 502);
+          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook (periksa URL webhook atau koneksi internet)' }, 502);
           return;
         }
 
-        addLog(`⚠️ Peringatan target belum tuntas (${report.uploadedCount}/${report.target}) grup ${group.name} dikirim ke Discord!`, 'warn');
-        sendJson({ success: true, message: 'Peringatan target belum tuntas berhasil dikirim ke Discord' });
+        addLog(`⚠️ Peringatan target belum tuntas grup "${group.name}" dikirim ke ${taskWebhooks.length} webhook Discord!`, 'warn');
+        sendJson({ success: true, message: `Peringatan target berhasil dikirim ke ${taskWebhooks.length} webhook Discord!` });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }
@@ -988,6 +1023,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }
+      return;
+    }
+
+    // Catch-all for undefined API routes (ensure JSON response, never plain text/html)
+    if (pathname.startsWith('/api/')) {
+      sendJson({ success: false, error: `Rute API tidak ditemukan: ${req.method} ${pathname}` }, 404);
       return;
     }
 
