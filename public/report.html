@@ -231,6 +231,66 @@
       color: var(--tiktok-cyan);
     }
 
+    /* Date Switcher (Hari Ini vs Hari Sebelumnya) */
+    .date-switcher-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .date-switcher-pill {
+      display: inline-flex;
+      background: rgba(18, 22, 34, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .date-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .date-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .date-btn.active {
+      background: linear-gradient(135deg, rgba(37, 244, 238, 0.22), rgba(254, 44, 85, 0.22));
+      color: #fff;
+      border-color: rgba(37, 244, 238, 0.5);
+      box-shadow: 0 2px 12px rgba(37, 244, 238, 0.2);
+    }
+
+    .date-indicator {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      padding: 7px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .date-indicator strong {
+      color: var(--tiktok-cyan);
+    }
+
     /* ANTI-COPY PROTECTED SECTION */
     .report-protected-page {
       user-select: none !important;
@@ -816,6 +876,29 @@
         font-size: 0.72rem;
         line-height: 1.4;
       }
+
+      .date-switcher-wrap {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .date-switcher-pill {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .date-btn {
+        justify-content: center;
+        padding: 9px 8px;
+        font-size: 0.78rem;
+      }
+
+      .date-indicator {
+        text-align: center;
+        font-size: 0.76rem;
+      }
     }
   </style>
 </head>
@@ -848,6 +931,21 @@
         </button>
       </div>
     </header>
+
+    <!-- Date Switcher (Hari Ini & Hari Sebelumnya) -->
+    <div class="date-switcher-wrap">
+      <div class="date-switcher-pill">
+        <button type="button" class="date-btn active" id="btn-date-today" onclick="switchReportDate(0)">
+          <span>📅 Hari Ini</span>
+        </button>
+        <button type="button" class="date-btn" id="btn-date-yesterday" onclick="switchReportDate(-1)">
+          <span>⏮️ Hari Sebelumnya (Kemarin)</span>
+        </button>
+      </div>
+      <div class="date-indicator">
+        Laporan: <strong id="date-active-label">Hari Ini (WIB)</strong>
+      </div>
+    </div>
 
     <!-- Group Selector Tabs -->
     <div class="group-tabs" id="group-tabs-container">
@@ -953,6 +1051,7 @@
   <script>
     let reportData = null;
     let selectedGroupId = null;
+    let currentOffsetDays = 0;
 
     function escapeHtml(text) {
       if (!text) return '';
@@ -992,6 +1091,26 @@
       }
     }
 
+    // Switch between Hari Ini (0) and Hari Sebelumnya / Kemarin (-1)
+    function switchReportDate(offset) {
+      currentOffsetDays = Number(offset);
+      const btnToday = document.getElementById('btn-date-today');
+      const btnYesterday = document.getElementById('btn-date-yesterday');
+      if (btnToday) btnToday.classList.toggle('active', currentOffsetDays === 0);
+      if (btnYesterday) btnYesterday.classList.toggle('active', currentOffsetDays === -1);
+
+      const url = new URL(window.location);
+      if (currentOffsetDays === 0) {
+        url.searchParams.delete('offset');
+        url.searchParams.delete('date');
+      } else {
+        url.searchParams.set('offset', currentOffsetDays);
+      }
+      window.history.replaceState({}, '', url);
+
+      fetchPublicReport();
+    }
+
     // Share Current Public Report Page URL
     document.getElementById('btn-copy-page-url').addEventListener('click', async () => {
       const currentUrl = window.location.href;
@@ -1029,7 +1148,24 @@
       try {
         const urlParams = new URLSearchParams(window.location.search);
         const groupParam = urlParams.get('group') || urlParams.get('groupId') || selectedGroupId || '';
-        const endpoint = `/api/public/daily-report${groupParam ? `?group=${encodeURIComponent(groupParam)}` : ''}`;
+        
+        // Check date query params on initial load
+        if (urlParams.has('offset')) {
+          currentOffsetDays = parseInt(urlParams.get('offset'), 10) || 0;
+        } else if (urlParams.get('date') === 'yesterday' || urlParams.get('date') === 'kemarin') {
+          currentOffsetDays = -1;
+        }
+
+        const btnToday = document.getElementById('btn-date-today');
+        const btnYesterday = document.getElementById('btn-date-yesterday');
+        if (btnToday) btnToday.classList.toggle('active', currentOffsetDays === 0);
+        if (btnYesterday) btnYesterday.classList.toggle('active', currentOffsetDays === -1);
+
+        const params = new URLSearchParams();
+        if (groupParam) params.set('group', groupParam);
+        if (currentOffsetDays !== 0) params.set('offset', currentOffsetDays);
+
+        const endpoint = `/api/public/daily-report${params.toString() ? `?${params.toString()}` : ''}`;
 
         const res = await fetch(endpoint);
         if (!res.ok) throw new Error('Gagal mengambil laporan publik');
@@ -1079,9 +1215,17 @@
 
       const rep = selected.report;
       const groupName = selected.name;
+      const isToday = rep.isToday ?? (currentOffsetDays === 0);
+      const dayLabel = rep.dayLabel || (isToday ? 'Hari Ini' : 'Kemarin');
+
+      // Update date label in switcher indicator
+      const activeLabelEl = document.getElementById('date-active-label');
+      if (activeLabelEl) {
+        activeLabelEl.textContent = `${rep.formattedDate || ''} (${dayLabel})`;
+      }
 
       // 2. Summary Card
-      document.getElementById('report-date-tag').textContent = rep.formattedDate || 'Hari Ini (WIB)';
+      document.getElementById('report-date-tag').textContent = `${rep.formattedDate || 'WIB'} • ${dayLabel}`;
       document.getElementById('group-name-tag').textContent = `Grup: ${groupName}`;
 
       const statusBadge = document.getElementById('report-status-badge');
@@ -1106,7 +1250,7 @@
       // Double upload warning
       if (rep.doubles && rep.doubles.length > 0) {
         boxDouble.style.display = 'flex';
-        descDouble.textContent = `${rep.doubles.length} akun melakukan double upload: ` +
+        descDouble.textContent = `${rep.doubles.length} akun melakukan double upload ${isToday ? 'hari ini' : 'kemarin'}: ` +
           rep.doubles.map((d) => `@${d.account} (${d.count} video)`).join(', ');
       } else {
         boxDouble.style.display = 'none';
@@ -1117,7 +1261,7 @@
         boxIncomplete.style.display = 'flex';
         const sample = (rep.missing || []).slice(0, 5).map((m) => `@${m}`).join(', ');
         const more = (rep.missing || []).length > 5 ? ` dan ${(rep.missing || []).length - 5} lainnya` : '';
-        descIncomplete.textContent = `${(rep.missing || []).length} akun belum upload: ${sample}${more}. Masih butuh ${rep.remainingNeeded} akun lagi untuk memenuhi kuota target 14 akun.`;
+        descIncomplete.textContent = `${(rep.missing || []).length} akun tidak upload ${isToday ? 'hari ini' : 'kemarin'}: ${sample}${more}. Masih butuh ${rep.remainingNeeded} akun lagi untuk memenuhi kuota target 14 akun.`;
       } else {
         boxIncomplete.style.display = 'none';
       }
@@ -1157,7 +1301,7 @@
 
         let statusHtml = '';
         let timeStr = '<span style="color:var(--text-muted)">-</span>';
-        let captionHtml = '<span style="color:var(--text-muted); font-style:italic;">Belum ada postingan hari ini</span>';
+        let captionHtml = `<span style="color:var(--text-muted); font-style:italic;">Belum ada postingan ${isToday ? 'hari ini' : 'kemarin'}</span>`;
         let actionsHtml = '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
 
         if (up) {
@@ -1193,7 +1337,7 @@
             </div>
           `;
         } else {
-          statusHtml = `<span class="status-pill pending">⏳ Belum Upload</span>`;
+          statusHtml = `<span class="status-pill pending">⏳ ${isToday ? 'Belum Upload' : 'Tidak Ada Upload'}</span>`;
         }
 
         const avatarPlaceholder = `<div class="clippers-avatar-placeholder">${acc.charAt(0).toUpperCase()}</div>`;

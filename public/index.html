@@ -200,6 +200,21 @@
           </div>
         </div>
 
+        <!-- DATE SWITCHER (HARI INI & HARI SEBELUMNYA) -->
+        <div class="date-switcher-wrap" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;">
+          <div class="date-switcher-pill" style="display: inline-flex; background: rgba(18, 22, 34, 0.85); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 4px; gap: 4px;">
+            <button type="button" class="btn btn-xs date-toggle-btn active" id="btn-dash-date-today" onclick="switchDashboardDate(0)">
+              <span>📅 Hari Ini</span>
+            </button>
+            <button type="button" class="btn btn-xs date-toggle-btn" id="btn-dash-date-yesterday" onclick="switchDashboardDate(-1)">
+              <span>⏮️ Hari Sebelumnya (Kemarin)</span>
+            </button>
+          </div>
+          <div class="date-indicator" style="font-size: 0.82rem; color: var(--text-muted); padding: 6px 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.06);">
+            Laporan: <strong id="dash-date-active-label" style="color: var(--tiktok-cyan);">Hari Ini (WIB)</strong>
+          </div>
+        </div>
+
         <!-- Group Selector Tabs for Daily Report -->
         <div class="group-tabs" id="report-group-tabs-container">
           <!-- Populated by JS -->

@@ -54,24 +54,32 @@ export function addLog(message, type = 'info') {
 
 /**
  * Get date boundaries in Asia/Jakarta (WIB)
+ * @param {number} offsetDays 0 for today, -1 for yesterday
  */
-export function getJakartaDateInfo() {
+export function getJakartaDateInfo(offsetDays = 0) {
+  const numOffset = parseInt(offsetDays, 10) || 0;
   const now = new Date();
-  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+  const targetDate = new Date(now.getTime() + (numOffset * 86400 * 1000));
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(targetDate);
   const startOfDayWIB = Math.floor(new Date(`${dateStr}T00:00:00+07:00`).getTime() / 1000);
   const endOfDayWIB = startOfDayWIB + 86400;
   const formattedDate = new Intl.DateTimeFormat('id-ID', {
     dateStyle: 'full',
     timeZone: 'Asia/Jakarta'
-  }).format(now);
-  return { dateStr, startOfDayWIB, endOfDayWIB, formattedDate };
+  }).format(targetDate);
+  const isToday = numOffset === 0;
+  const dayLabel = isToday ? 'Hari Ini' : (numOffset === -1 ? 'Kemarin (Hari Sebelumnya)' : `${Math.abs(numOffset)} hari lalu`);
+  return { dateStr, startOfDayWIB, endOfDayWIB, formattedDate, offsetDays: numOffset, isToday, dayLabel };
 }
 
 /**
  * Generate complete Daily Report data for a clipper group
+ * @param {object} group Group configuration
+ * @param {object} accountCache Account cache
+ * @param {number} offsetDays 0 for today, -1 for yesterday
  */
-export function generateDailyReportData(group, accountCache = {}) {
-  const { dateStr, startOfDayWIB, endOfDayWIB, formattedDate } = getJakartaDateInfo();
+export function generateDailyReportData(group, accountCache = {}, offsetDays = 0) {
+  const { dateStr, startOfDayWIB, endOfDayWIB, formattedDate, isToday, dayLabel } = getJakartaDateInfo(offsetDays);
   const target = 14;
   const accounts = group.accounts || [];
 
@@ -84,13 +92,13 @@ export function generateDailyReportData(group, accountCache = {}) {
     const cached = accountCache[acc];
     const videos = cached?.recentVideos || (cached?.latestVideo ? [cached.latestVideo] : []);
 
-    // Filter videos created today in WIB
-    const todayVideos = videos.filter(
+    // Filter videos created on this date in WIB
+    const targetVideos = videos.filter(
       (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
     );
 
-    if (todayVideos.length > 0) {
-      const topVideo = todayVideos[0];
+    if (targetVideos.length > 0) {
+      const topVideo = targetVideos[0];
       const videoUrl = topVideo.url || `https://www.tiktok.com/@${acc}/video/${topVideo.id}`;
       uploaded.push({
         account: acc,
@@ -99,8 +107,8 @@ export function generateDailyReportData(group, accountCache = {}) {
         videoId: topVideo.id,
         desc: topVideo.desc || '',
         createTime: topVideo.createTime,
-        uploadCountToday: todayVideos.length,
-        todayVideos: todayVideos.map((v) => ({
+        uploadCountToday: targetVideos.length,
+        todayVideos: targetVideos.map((v) => ({
           id: v.id,
           url: v.url || `https://www.tiktok.com/@${acc}/video/${v.id}`,
           createTime: v.createTime,
@@ -108,11 +116,11 @@ export function generateDailyReportData(group, accountCache = {}) {
         }))
       });
 
-      if (todayVideos.length > 1) {
+      if (targetVideos.length > 1) {
         doubles.push({
           account: acc,
-          count: todayVideos.length,
-          videos: todayVideos.map((v) => ({
+          count: targetVideos.length,
+          videos: targetVideos.map((v) => ({
             id: v.id,
             url: v.url || `https://www.tiktok.com/@${acc}/video/${v.id}`,
             createTime: v.createTime
@@ -124,7 +132,7 @@ export function generateDailyReportData(group, accountCache = {}) {
     }
   }
 
-  const uploadedCount = uploaded.length; // Number of unique accounts in group that uploaded today
+  const uploadedCount = uploaded.length; // Number of unique accounts in group that uploaded on selected date
   const isCompleted = uploadedCount >= target; // 14 accounts each uploading 1 video = SELESAI
   const remainingNeeded = Math.max(0, target - uploadedCount);
   const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
@@ -132,14 +140,14 @@ export function generateDailyReportData(group, accountCache = {}) {
   // Format clean text
   const copyLines = [];
   copyLines.push(`📊 DAILY REPORT CLIPPERS — ${group.name.toUpperCase()}`);
-  copyLines.push(`📅 Hari/Tanggal: ${formattedDate}`);
+  copyLines.push(`📅 Hari/Tanggal: ${formattedDate} (${dayLabel})`);
   copyLines.push(`🎯 Target Kuota: 1 video di ${target} akun = Selesai`);
   copyLines.push(`📈 Pencapaian: ${uploadedCount}/${target} Akun (${percentage}%)`);
   copyLines.push(`⚡ Status: ${isCompleted ? '✅ SELESAI (Target 14 Akun Tuntas)' : `⚠️ BELUM SELESAI (Kurang ${remainingNeeded} Akun Lagi)`}`);
   copyLines.push('');
   copyLines.push(`✅ SUDAH UPLOAD (${uploadedCount} AKUN):`);
   if (uploaded.length === 0) {
-    copyLines.push('(Belum ada akun yang upload hari ini)');
+    copyLines.push(`(Belum ada akun yang upload pada ${dayLabel.toLowerCase()})`);
   } else {
     uploaded.forEach((u, i) => {
       copyLines.push(`${i + 1}. @${u.account} — ${u.videoUrl}`);
@@ -160,7 +168,7 @@ export function generateDailyReportData(group, accountCache = {}) {
     copyLines.push('');
     copyLines.push(`⚠️ PERINGATAN DOUBLE UPLOAD (${doubles.length} AKUN):`);
     doubles.forEach((d) => {
-      copyLines.push(`• @${d.account} (${d.count} video hari ini):`);
+      copyLines.push(`• @${d.account} (${d.count} video ${isToday ? 'hari ini' : 'kemarin'}):`);
       d.videos.forEach((v) => {
         copyLines.push(`   - ${v.url}`);
       });
@@ -175,6 +183,9 @@ export function generateDailyReportData(group, accountCache = {}) {
     webhookUrl: group.webhookUrl || '',
     date: dateStr,
     formattedDate,
+    offsetDays: parseInt(offsetDays, 10) || 0,
+    isToday,
+    dayLabel,
     target,
     totalAccounts: accounts.length,
     accounts,
@@ -339,6 +350,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         const config = await getFullConfig();
         const groups = config.groups || [];
         const targetGroupId = url.searchParams.get('groupId') || url.searchParams.get('group');
+        const dateParam = (url.searchParams.get('date') || '').toLowerCase();
+        let offsetDays = parseInt(url.searchParams.get('offset') || '0', 10);
+        if (dateParam === 'yesterday' || dateParam === 'kemarin' || dateParam === 'prev') {
+          offsetDays = -1;
+        }
+        if (isNaN(offsetDays)) offsetDays = 0;
 
         // Ensure account cache is hydrated
         if (!runtimeState.accountCache || Object.keys(runtimeState.accountCache).length === 0) {
@@ -352,7 +369,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         // Return clean public report without sensitive webhook URLs
         const groupReports = groups.map((g) => {
-          const report = generateDailyReportData(g, runtimeState.accountCache);
+          const report = generateDailyReportData(g, runtimeState.accountCache, offsetDays);
           return {
             id: g.id,
             name: g.name,
@@ -370,8 +387,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           selected = groupReports.find((g) => g.totalAccounts > 0) || groupReports[0] || null;
         }
 
+        const dateInfo = getJakartaDateInfo(offsetDays);
+
         sendJson({
           success: true,
+          offsetDays,
+          dateInfo,
           groups: groupReports.map((g) => ({ id: g.id, name: g.name, totalAccounts: g.totalAccounts })),
           selectedGroup: selected,
           timestamp: Date.now()
@@ -764,8 +785,15 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        const report = generateDailyReportData(group, runtimeState.accountCache);
-        sendJson({ success: true, report });
+        const dateParam = (url.searchParams.get('date') || '').toLowerCase();
+        let offsetDays = parseInt(url.searchParams.get('offset') || '0', 10);
+        if (dateParam === 'yesterday' || dateParam === 'kemarin' || dateParam === 'prev') {
+          offsetDays = -1;
+        }
+        if (isNaN(offsetDays)) offsetDays = 0;
+
+        const report = generateDailyReportData(group, runtimeState.accountCache, offsetDays);
+        sendJson({ success: true, report, offsetDays });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }
@@ -789,7 +817,11 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        const report = generateDailyReportData(group, runtimeState.accountCache);
+        const body = await parseBody().catch(() => ({}));
+        let offsetDays = parseInt(body.offsetDays ?? url.searchParams.get('offset') ?? '0', 10);
+        if (isNaN(offsetDays)) offsetDays = 0;
+
+        const report = generateDailyReportData(group, runtimeState.accountCache, offsetDays);
         const sent = await sendDiscordDailyReport(group.webhookUrl, group.name, report);
         if (!sent) {
           sendJson({ success: false, error: 'Gagal mengirim Daily Report ke Discord Webhook' }, 502);

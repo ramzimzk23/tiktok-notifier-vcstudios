@@ -1,6 +1,6 @@
 import { getTikTokUserVideos } from './scraper.js';
 import { sendDiscordNotification } from './notifier.js';
-import { getAccountStates, updateAccountState } from './db.js';
+import { getAccountStates, updateAccountState, hasVideoBeenSent, markVideoAsSent } from './db.js';
 
 /**
  * Check an individual TikTok account for new videos
@@ -38,9 +38,17 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
     await updateAccountState(cleanUser, latestVideo.id, latestVideo.createTime);
 
     if (notifyOnFirstDiscovery) {
-      console.log(`[Tracker] Mengirim notifikasi inisial ke Discord...`);
-      await sendDiscordNotification(webhookUrl, user, latestVideo, groupName);
+      const alreadySent = await hasVideoBeenSent(cleanUser, latestVideo.id);
+      if (!alreadySent) {
+        console.log(`[Tracker] Mengirim notifikasi inisial ke Discord...`);
+        const sent = await sendDiscordNotification(webhookUrl, user, latestVideo, groupName);
+        if (sent) {
+          await markVideoAsSent(cleanUser, latestVideo.id);
+        }
+      }
     } else {
+      // Mark as sent so baseline video will never trigger an alert later
+      await markVideoAsSent(cleanUser, latestVideo.id);
       console.log(`[Tracker] Baseline disimpan. Notifikasi berikutnya akan dikirim jika ada postingan baru.`);
     }
     return result;
@@ -48,11 +56,20 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
 
   // Account exists in state, check for new video ID
   if (accountState.lastVideoId !== latestVideo.id) {
+    // ANTI-SPAM GUARD: verify video ID has not already been sent to Discord
+    const alreadySent = await hasVideoBeenSent(cleanUser, latestVideo.id);
+    if (alreadySent) {
+      console.log(`[Tracker] ℹ️ Video @${cleanUser} (ID: ${latestVideo.id}) sudah pernah dikirim ke Discord. Melewati notifikasi untuk mencegah spam.`);
+      await updateAccountState(cleanUser, latestVideo.id, latestVideo.createTime);
+      return result;
+    }
+
     console.log(`[Tracker] 🔔 POSTINGAN BARU TERDETEKSI untuk @${cleanUser}! (ID: ${latestVideo.id})`);
     
     const sent = await sendDiscordNotification(webhookUrl, user, latestVideo, groupName);
     if (sent) {
       console.log(`[Tracker] ✅ Notifikasi berhasil dikirim ke Discord!`);
+      await markVideoAsSent(cleanUser, latestVideo.id);
       await updateAccountState(cleanUser, latestVideo.id, latestVideo.createTime);
     } else {
       console.error(`[Tracker] ❌ Gagal mengirim notifikasi ke Discord.`);

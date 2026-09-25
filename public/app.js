@@ -415,6 +415,21 @@ function renderGroupBanner(group) {
 
 // Daily Report State & Renderer
 let currentDailyReport = null;
+let currentDailyReportOffset = 0; // 0 = Hari Ini, -1 = Hari Sebelumnya (Kemarin)
+
+function switchDashboardDate(offset) {
+  currentDailyReportOffset = Number(offset);
+  const btnToday = document.getElementById('btn-dash-date-today');
+  const btnYesterday = document.getElementById('btn-dash-date-yesterday');
+  if (btnToday) btnToday.classList.toggle('active', currentDailyReportOffset === 0);
+  if (btnYesterday) btnYesterday.classList.toggle('active', currentDailyReportOffset === -1);
+
+  const activeGroup = currentConfig?.groups?.find((g) => g.id === activeGroupId) || currentConfig?.groups?.[0];
+  if (activeGroup) {
+    renderDailyReportCard(activeGroup, runtimeState.accountCache);
+  }
+}
+window.switchDashboardDate = switchDashboardDate;
 
 function renderDailyReportCard(group, cache = {}) {
   const card = document.getElementById('daily-report-card');
@@ -431,12 +446,16 @@ function renderDailyReportCard(group, cache = {}) {
   }
   card.style.display = 'block';
 
-  // Calculate WIB date start & end
+  // Calculate WIB date start & end based on currentDailyReportOffset
+  const numOffset = currentDailyReportOffset || 0;
   const now = new Date();
-  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+  const targetDate = new Date(now.getTime() + (numOffset * 86400 * 1000));
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(targetDate);
   const startOfDayWIB = Math.floor(new Date(`${dateStr}T00:00:00+07:00`).getTime() / 1000);
   const endOfDayWIB = startOfDayWIB + 86400;
-  const formattedDate = new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeZone: 'Asia/Jakarta' }).format(now);
+  const formattedDate = new Intl.DateTimeFormat('id-ID', { dateStyle: 'full', timeZone: 'Asia/Jakarta' }).format(targetDate);
+  const isToday = numOffset === 0;
+  const dayLabel = isToday ? 'Hari Ini' : (numOffset === -1 ? 'Kemarin' : `${Math.abs(numOffset)} hari lalu`);
 
   const target = 14; // Kuota target: 1 video di 14 akun = SELESAI
   const accounts = group.accounts || [];
@@ -449,25 +468,25 @@ function renderDailyReportCard(group, cache = {}) {
     const cached = cache[acc];
     const videos = cached?.recentVideos || (cached?.latestVideo ? [cached.latestVideo] : []);
 
-    const todayVideos = videos.filter(
+    const targetVideos = videos.filter(
       (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
     );
 
-    if (todayVideos.length > 0) {
-      const topVideo = todayVideos[0];
+    if (targetVideos.length > 0) {
+      const topVideo = targetVideos[0];
       const videoUrl = topVideo.url || `https://www.tiktok.com/@${acc}/video/${topVideo.id}`;
       const item = {
         account: acc,
         videoUrl,
         videoId: topVideo.id,
-        uploadCountToday: todayVideos.length,
-        todayVideos,
+        uploadCountToday: targetVideos.length,
+        todayVideos: targetVideos,
         topVideo,
         createTime: topVideo.createTime
       };
       uploaded.push(item);
 
-      if (todayVideos.length > 1) {
+      if (targetVideos.length > 1) {
         doubles.push(item);
       }
     } else {
@@ -486,6 +505,9 @@ function renderDailyReportCard(group, cache = {}) {
     groupName: group.name,
     dateStr,
     formattedDate,
+    offsetDays: numOffset,
+    isToday,
+    dayLabel,
     target,
     uploadedCount,
     remainingNeeded,
@@ -497,6 +519,7 @@ function renderDailyReportCard(group, cache = {}) {
   };
 
   // Update DOM elements
+  const dashDateActiveLabel = document.getElementById('dash-date-active-label');
   const dateBadge = document.getElementById('report-date-badge');
   const statusBadge = document.getElementById('report-status-badge');
   const progressText = document.getElementById('report-progress-text');
@@ -505,8 +528,14 @@ function renderDailyReportCard(group, cache = {}) {
   const doubleList = document.getElementById('report-double-upload-list');
   const incompleteBox = document.getElementById('report-incomplete-box');
   const incompleteDesc = document.getElementById('report-incomplete-desc');
+  const subDesc = document.getElementById('daily-report-sub-desc');
 
-  if (dateBadge) dateBadge.textContent = dateStr;
+  if (dashDateActiveLabel) dashDateActiveLabel.textContent = `${formattedDate} (${dayLabel})`;
+  if (dateBadge) dateBadge.textContent = `${dateStr} (${dayLabel})`;
+  if (subDesc) {
+    subDesc.textContent = `Sistem secara otomatis menghitung akun unik yang mengunggah minimal 1 video ${isToday ? 'hari ini' : 'kemarin'}.`;
+  }
+
   if (statusBadge) {
     if (isCompleted) {
       statusBadge.className = 'report-status-badge status-completed';
@@ -529,7 +558,7 @@ function renderDailyReportCard(group, cache = {}) {
     if (doubles.length > 0) {
       doubleBox.style.display = 'flex';
       doubleList.innerHTML = doubles
-        .map((d) => `<span class="double-tag-item">@${escapeHtml(d.account)} (${d.uploadCountToday} video hari ini)</span>`)
+        .map((d) => `<span class="double-tag-item">@${escapeHtml(d.account)} (${d.uploadCountToday} video ${isToday ? 'hari ini' : 'kemarin'})</span>`)
         .join('');
     } else {
       doubleBox.style.display = 'none';
@@ -542,7 +571,7 @@ function renderDailyReportCard(group, cache = {}) {
       incompleteBox.style.display = 'flex';
       const sampleMissing = missing.slice(0, 6).map((m) => `@${m}`).join(', ');
       const moreMissing = missing.length > 6 ? ` dan ${missing.length - 6} lainnya` : '';
-      incompleteDesc.textContent = `${missing.length} akun belum upload hari ini: ${sampleMissing}${moreMissing}. Masih butuh ${remainingNeeded} akun lagi untuk memenuhi kuota 14 akun.`;
+      incompleteDesc.textContent = `${missing.length} akun tidak upload ${isToday ? 'hari ini' : 'kemarin'}: ${sampleMissing}${moreMissing}. Masih butuh ${remainingNeeded} akun lagi untuk memenuhi kuota 14 akun.`;
     } else {
       incompleteBox.style.display = 'none';
     }
@@ -554,10 +583,10 @@ function renderDailyReportCard(group, cache = {}) {
   }
 
   // Render the protected report table
-  renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target);
+  renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target, isToday);
 }
 
-function renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target) {
+function renderDailyReportTable(group, cache, uploaded, missing, doubles, isCompleted, target, isToday = true) {
   const tbody = document.getElementById('report-table-body');
   const countBadge = document.getElementById('report-table-count-badge');
   if (!tbody) return;
@@ -596,7 +625,7 @@ function renderDailyReportTable(group, cache, uploaded, missing, doubles, isComp
 
     let statusPill = '';
     let timeStr = '<span style="color:var(--text-muted)">-</span>';
-    let captionHtml = '<span style="color:var(--text-muted); font-style:italic;">Belum ada video hari ini</span>';
+    let captionHtml = `<span style="color:var(--text-muted); font-style:italic;">Belum ada video ${isToday ? 'hari ini' : 'kemarin'}</span>`;
     let actionsHtml = '<span style="color:var(--text-muted); font-size:0.75rem;">-</span>';
 
     if (upData) {
@@ -631,7 +660,7 @@ function renderDailyReportTable(group, cache, uploaded, missing, doubles, isComp
         </div>
       `;
     } else {
-      statusPill = `<span class="table-status-pill status-pending">⏳ Belum Upload</span>`;
+      statusPill = `<span class="table-status-pill status-pending">⏳ ${isToday ? 'Belum Upload' : 'Tidak Ada Upload'}</span>`;
     }
 
     const avatarHtml = avatar
@@ -1537,7 +1566,9 @@ if (sendDiscordReportBtn) {
 
     try {
       const res = await authFetch(`/api/groups/${activeGroupId}/daily-report/send`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ offsetDays: currentDailyReportOffset })
       });
       const data = await res.json();
       if (data.success) {

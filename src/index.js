@@ -6,7 +6,8 @@ import {
   readLocalCache,
   writeLocalCache,
   loadAccountCacheFromDb,
-  saveAccountCacheToDb
+  saveAccountCacheToDb,
+  seedSentVideosFromCache
 } from './db.js';
 import {
   sendDiscordWarningNotification,
@@ -239,6 +240,7 @@ async function main() {
     if (cachedData && Object.keys(cachedData).length > 0) {
       runtimeState.accountCache = cachedData;
       console.log(`⚡ Pre-loaded ${Object.keys(cachedData).length} akun dari database persistent.`);
+      await seedSentVideosFromCache(cachedData);
     }
   } catch (err) {
     console.error('Failed to load initial cache from DB:', err.message);

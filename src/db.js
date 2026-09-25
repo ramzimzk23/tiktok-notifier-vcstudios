@@ -9,6 +9,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = path.resolve(__dirname, '../config.json');
 const STATE_FILE = path.resolve(__dirname, '../state.json');
 const CACHE_FILE = path.resolve(__dirname, '../cache.json');
+const SENT_VIDEOS_FILE = path.resolve(__dirname, '../sent_videos.json');
+
+// In-memory set of video IDs that have already been sent to Discord (to prevent duplicate spam)
+const sentVideosSet = new Set();
+let sentVideosLoaded = false;
 
 let supabaseClient = null;
 let isSupabaseActive = false;
@@ -100,6 +105,86 @@ export async function writeLocalCache(cache) {
     await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
   } catch (err) {
     console.error('[DB] Gagal menulis cache:', err.message);
+  }
+}
+
+/**
+ * Load sent video history from sent_videos.json
+ */
+export async function loadSentVideos() {
+  if (sentVideosLoaded) return sentVideosSet;
+  try {
+    const raw = await fs.readFile(SENT_VIDEOS_FILE, 'utf-8');
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      for (const id of arr) {
+        sentVideosSet.add(String(id));
+      }
+    }
+  } catch {
+    // File will be created on first mark or seed
+  }
+  sentVideosLoaded = true;
+  return sentVideosSet;
+}
+
+/**
+ * Check if a video has already been posted to Discord webhook
+ */
+export async function hasVideoBeenSent(username, videoId) {
+  if (!videoId) return false;
+  if (!sentVideosLoaded) await loadSentVideos();
+  const vId = String(videoId);
+  const u = (username || '').replace(/^@/, '').toLowerCase();
+  return sentVideosSet.has(vId) || (u && sentVideosSet.has(`${u}:${vId}`));
+}
+
+/**
+ * Mark a video as sent to Discord to prevent duplicate webhook notifications
+ */
+export async function markVideoAsSent(username, videoId) {
+  if (!videoId) return;
+  if (!sentVideosLoaded) await loadSentVideos();
+  const vId = String(videoId);
+  const u = (username || '').replace(/^@/, '').toLowerCase();
+  sentVideosSet.add(vId);
+  if (u) sentVideosSet.add(`${u}:${vId}`);
+
+  try {
+    const arr = Array.from(sentVideosSet);
+    await fs.writeFile(SENT_VIDEOS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[DB] Gagal menyimpan sent_videos:', err.message);
+  }
+}
+
+/**
+ * Pre-populate sent_videos with existing cached videos so they are never alerted as new
+ */
+export async function seedSentVideosFromCache(cache) {
+  if (!cache) return;
+  if (!sentVideosLoaded) await loadSentVideos();
+  let added = 0;
+  for (const [user, data] of Object.entries(cache)) {
+    const cleanUser = user.replace(/^@/, '').toLowerCase();
+    const videos = data.recentVideos || (data.latestVideo ? [data.latestVideo] : []);
+    for (const v of videos) {
+      if (v && v.id) {
+        const vId = String(v.id);
+        if (!sentVideosSet.has(vId)) {
+          sentVideosSet.add(vId);
+          sentVideosSet.add(`${cleanUser}:${vId}`);
+          added++;
+        }
+      }
+    }
+  }
+  if (added > 0) {
+    try {
+      const arr = Array.from(sentVideosSet);
+      await fs.writeFile(SENT_VIDEOS_FILE, JSON.stringify(arr, null, 2), 'utf-8');
+      console.log(`[DB] Berhasil menginisialisasi ${sentVideosSet.size} riwayat video terkirim (anti-spam aktif).`);
+    } catch {}
   }
 }
 
@@ -543,8 +628,17 @@ export async function getAccountStates() {
       if (!error && data) {
         const stateMap = {};
         for (const row of data) {
+          let cleanId = row.last_video_id;
+          if (cleanId && (cleanId.startsWith('[') || cleanId.startsWith('{'))) {
+            try {
+              const parsed = JSON.parse(cleanId);
+              cleanId = Array.isArray(parsed) ? (parsed[0]?.id || null) : (parsed?.id || null);
+            } catch {
+              cleanId = row.last_video_id;
+            }
+          }
           stateMap[row.username] = {
-            lastVideoId: row.last_video_id,
+            lastVideoId: cleanId,
             lastPostTime: row.last_post_time,
             lastCheckTime: row.last_check_time
           };
