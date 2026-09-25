@@ -624,18 +624,29 @@
                   </label>
                 </div>
 
-                <div class="compact-input-row">
+                <div class="compact-input-row" style="grid-template-columns: 1fr 1fr;">
                   <div class="compact-input-col">
-                    <label class="compact-sublabel" for="group-modal-deadline">Batas Waktu (WIB)</label>
-                    <input type="time" id="group-modal-deadline" class="form-input form-input-compact font-mono" value="22:00" required>
+                    <label class="compact-sublabel" for="group-modal-reminder-start">Mulai Reminder (WIB)</label>
+                    <input type="time" id="group-modal-reminder-start" class="form-input form-input-compact font-mono" value="09:00" required>
                   </div>
                   <div class="compact-input-col">
-                    <label class="compact-sublabel" for="group-modal-warning-interval">Ulangi Tiap (Menit)</label>
-                    <input type="number" id="group-modal-warning-interval" class="form-input form-input-compact" value="60" min="5" max="720" required placeholder="60">
+                    <label class="compact-sublabel" for="group-modal-deadline">Batas Akhir / Deadline (WIB)</label>
+                    <input type="time" id="group-modal-deadline" class="form-input form-input-compact font-mono" value="22:00" required>
                   </div>
                 </div>
 
-                <div class="compact-check-banner">
+                <div class="compact-input-row" style="grid-template-columns: 1fr; margin-top: 6px;">
+                  <div class="compact-input-col">
+                    <label class="compact-sublabel" for="group-modal-warning-interval">Ulangi Tiap (Menit)</label>
+                    <input type="number" id="group-modal-warning-interval" class="form-input form-input-compact" value="30" min="5" max="720" required placeholder="30">
+                  </div>
+                </div>
+
+                <div style="font-size: 0.69rem; color: #94a3b8; margin-top: 6px; line-height: 1.4; padding: 4px 6px; background: rgba(0,0,0,0.25); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                  ℹ️ Reminder aktif mulai jam <strong>09:00 - 22:00 WIB</strong>, dan <strong>otomatis berhenti</strong> begitu target kuota tuntas (sebelum jam 22:00).
+                </div>
+
+                <div class="compact-check-banner" style="margin-top: 8px;">
                   <label class="compact-checkbox">
                     <input type="checkbox" id="group-modal-reminder-10m" checked>
                     <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum deadline</span>

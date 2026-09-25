@@ -507,7 +507,11 @@ function renderGroupBanner(group) {
       deadlinePill.style.color = 'var(--text-muted)';
       deadlinePill.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     } else {
-      const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
+      const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 30;
+      const startTimeStr = group.taskReminderStartTime || '09:00';
+      const [sH, sM] = startTimeStr.split(':');
+      const sTotalMin = (parseInt(sH, 10) || 9) * 60 + (parseInt(sM, 10) || 0);
+
       const now = new Date();
       const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Jakarta',
@@ -521,28 +525,33 @@ function renderGroupBanner(group) {
 
       const [dH, dM] = deadlineStr.split(':');
       const dTotalMin = (parseInt(dH, 10) || 22) * 60 + (parseInt(dM, 10) || 0);
-      const reminderStartMin = Math.max(0, dTotalMin - 10);
+      const reminderStartMin = Math.max(sTotalMin, dTotalMin - 10);
 
       const targetCount = group.accounts?.length > 0 ? Math.min(14, group.accounts.length) : 14;
       const isCompleted = stats.today >= targetCount;
 
       if (isCompleted) {
-        deadlinePill.textContent = '✅ Target Tuntas Hari Ini';
+        deadlinePill.textContent = '✅ Target Tuntas (Reminder Berhenti)';
         deadlinePill.style.background = 'rgba(16, 185, 129, 0.15)';
         deadlinePill.style.color = '#34d399';
         deadlinePill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      } else if (curTotalMin < sTotalMin) {
+        deadlinePill.textContent = `⏳ Reminder Mulai Jam ${startTimeStr} WIB`;
+        deadlinePill.style.background = 'rgba(255, 255, 255, 0.05)';
+        deadlinePill.style.color = 'var(--text-muted)';
+        deadlinePill.style.borderColor = 'rgba(255, 255, 255, 0.1)';
       } else if (curTotalMin >= reminderStartMin && curTotalMin < dTotalMin) {
         deadlinePill.textContent = `🚨 Peringatan Terakhir (${dTotalMin - curTotalMin}m menuju deadline)`;
         deadlinePill.style.background = 'rgba(239, 68, 68, 0.18)';
         deadlinePill.style.color = '#f87171';
         deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
       } else if (curTotalMin >= dTotalMin) {
-        deadlinePill.textContent = '🚨 Batas Waktu Terlewati';
+        deadlinePill.textContent = '🚨 Batas Waktu Terlewati (Reminder Berakhir)';
         deadlinePill.style.background = 'rgba(239, 68, 68, 0.18)';
         deadlinePill.style.color = '#f87171';
         deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
       } else {
-        deadlinePill.textContent = `⏳ Notif Tiap ${warningIntervalMins}m & 10m Sebelum Deadline`;
+        deadlinePill.textContent = `⏰ Reminder Aktif (${startTimeStr} - ${deadlineStr} WIB, Tiap ${warningIntervalMins}m)`;
         deadlinePill.style.background = 'rgba(37, 244, 238, 0.12)';
         deadlinePill.style.color = 'var(--tiktok-cyan)';
         deadlinePill.style.borderColor = 'rgba(37, 244, 238, 0.3)';
@@ -1540,8 +1549,10 @@ document.getElementById('btn-create-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Buat Grup Channel Baru';
   document.getElementById('group-modal-id').value = '';
   document.getElementById('group-modal-name').value = '';
-  document.getElementById('group-modal-warning-interval').value = '60';
+  const remStartEl = document.getElementById('group-modal-reminder-start');
+  if (remStartEl) remStartEl.value = '09:00';
   document.getElementById('group-modal-deadline').value = '22:00';
+  document.getElementById('group-modal-warning-interval').value = '30';
   document.getElementById('group-modal-reminder-10m').checked = true;
   document.getElementById('group-modal-reminder-enabled').checked = true;
   modalWebhooks = [{
@@ -1562,8 +1573,10 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Edit Grup Channel';
   document.getElementById('group-modal-id').value = currentGroup.id;
   document.getElementById('group-modal-name').value = currentGroup.name;
-  document.getElementById('group-modal-warning-interval').value = String(currentGroup.taskWarningIntervalMinutes !== undefined ? currentGroup.taskWarningIntervalMinutes : 60);
+  const remStartEl = document.getElementById('group-modal-reminder-start');
+  if (remStartEl) remStartEl.value = currentGroup.taskReminderStartTime || '09:00';
   document.getElementById('group-modal-deadline').value = currentGroup.taskDeadline || '22:00';
+  document.getElementById('group-modal-warning-interval').value = String(currentGroup.taskWarningIntervalMinutes !== undefined ? currentGroup.taskWarningIntervalMinutes : 30);
   document.getElementById('group-modal-reminder-10m').checked = currentGroup.taskReminder10MinEnabled !== false;
   document.getElementById('group-modal-reminder-enabled').checked = currentGroup.taskReminderEnabled !== false;
 
@@ -1624,12 +1637,9 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
     return;
   }
 
-  const isEdit = !!id;
-  const url = isEdit ? `/api/groups/${id}` : '/api/groups';
-  const method = isEdit ? 'PUT' : 'POST';
-
-  const taskWarningIntervalMinutes = Number(document.getElementById('group-modal-warning-interval')?.value || 60);
+  const taskReminderStartTime = document.getElementById('group-modal-reminder-start')?.value || '09:00';
   const taskDeadline = document.getElementById('group-modal-deadline')?.value || '22:00';
+  const taskWarningIntervalMinutes = Number(document.getElementById('group-modal-warning-interval')?.value || 30);
   const taskReminder10MinEnabled = document.getElementById('group-modal-reminder-10m')?.checked ?? true;
   const taskReminderEnabled = document.getElementById('group-modal-reminder-enabled')?.checked ?? true;
 
@@ -1641,6 +1651,7 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
         name,
         webhooks: cleanedWebhooks,
         webhookUrl: cleanedWebhooks[0]?.url || '',
+        taskReminderStartTime,
         taskDeadline,
         taskWarningIntervalMinutes,
         taskReminder10MinEnabled,

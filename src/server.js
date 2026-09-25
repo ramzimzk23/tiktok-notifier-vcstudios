@@ -86,8 +86,8 @@ export function getJakartaDateInfo(offsetDays = 0) {
  */
 export function generateDailyReportData(group, accountCache = {}, offsetDays = 0) {
   const { dateStr, startOfDayWIB, endOfDayWIB, formattedDate, isToday, dayLabel } = getJakartaDateInfo(offsetDays);
-  const target = 14;
   const accounts = group.accounts || [];
+  const target = accounts.length > 0 ? Math.min(14, accounts.length) : 14;
 
   const uploaded = [];
   const missing = [];
@@ -140,7 +140,7 @@ export function generateDailyReportData(group, accountCache = {}, offsetDays = 0
   }
 
   const uploadedCount = uploaded.length; // Number of unique accounts in group that uploaded on selected date
-  const isCompleted = uploadedCount >= target; // 14 accounts each uploading 1 video = SELESAI
+  const isCompleted = uploadedCount >= target || (accounts.length > 0 && missing.length === 0); // Target terpenuhi atau semua akun upload
   const remainingNeeded = Math.max(0, target - uploadedCount);
   const percentage = Math.min(100, Math.round((uploadedCount / target) * 100));
 
@@ -603,6 +603,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         const id = 'group-' + Date.now();
+        const taskReminderStartTime = (body.taskReminderStartTime || '09:00').trim();
         const taskDeadline = (body.taskDeadline || '22:00').trim();
         const taskWarningIntervalMinutes = body.taskWarningIntervalMinutes !== undefined ? Number(body.taskWarningIntervalMinutes) : 60;
         const taskReminder10MinEnabled = body.taskReminder10MinEnabled !== undefined ? Boolean(body.taskReminder10MinEnabled) : true;
@@ -614,6 +615,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           name,
           webhookUrl: webhooks[0]?.url || fallbackUrl || '',
           webhooks,
+          taskReminderStartTime,
           taskDeadline,
           taskWarningIntervalMinutes,
           taskReminder10MinEnabled,
@@ -672,6 +674,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           }
         }
 
+        if (body.taskReminderStartTime !== undefined) group.taskReminderStartTime = String(body.taskReminderStartTime).trim() || '09:00';
         if (body.taskDeadline !== undefined) group.taskDeadline = String(body.taskDeadline).trim() || '22:00';
         if (body.taskWarningIntervalMinutes !== undefined) group.taskWarningIntervalMinutes = Number(body.taskWarningIntervalMinutes);
         if (body.taskReminder10MinEnabled !== undefined) group.taskReminder10MinEnabled = Boolean(body.taskReminder10MinEnabled);
