@@ -9,6 +9,7 @@ import {
   sendDiscordIncompleteWarning,
   sendDiscordDailyReport,
   sendDiscordTestPing,
+  sendDiscordTaskCompletedNotification,
   getWebhooksForEvent,
   WEBHOOK_EVENTS,
   lastWebhookError
@@ -963,29 +964,48 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         const report = generateDailyReportData(group, runtimeState.accountCache);
-        const reminderType = body.reminderType || '10_min_reminder';
+        const reminderType = body.reminderType || (report.isCompleted ? 'completed' : '10_min_reminder');
         const isTest = body.isTest !== false; // Pemanggilan manual via tombol dianggap tes/preview
-        const sent = await sendDiscordIncompleteWarning(
-          group,
-          group.name,
-          report.uploadedCount,
-          report.target,
-          report.missing,
-          {
-            reminderType,
-            deadlineTime: group.taskDeadline || '22:00',
-            reminderMinutes: group.taskReminderMinutes || 10,
-            isTest
-          }
-        );
+        let sent = false;
+
+        if (reminderType === 'completed') {
+          sent = await sendDiscordTaskCompletedNotification(
+            group,
+            group.name,
+            report.uploadedCount,
+            report.target,
+            report.uploaded,
+            {
+              deadlineTime: group.taskDeadline || '22:00'
+            }
+          );
+        } else {
+          sent = await sendDiscordIncompleteWarning(
+            group,
+            group.name,
+            report.uploadedCount,
+            report.target,
+            report.missing,
+            {
+              reminderType,
+              deadlineTime: group.taskDeadline || '22:00',
+              reminderMinutes: group.taskReminderMinutes || 10,
+              isTest
+            }
+          );
+        }
 
         if (!sent) {
-          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook (periksa URL webhook atau koneksi internet)' }, 502);
+          const failMsg = lastWebhookError || 'Gagal mengirim notifikasi ke Discord Webhook';
+          sendJson({ success: false, error: failMsg, message: failMsg }, 502);
           return;
         }
 
-        addLog(`⚠️ Peringatan target belum tuntas grup "${group.name}" dikirim ke ${taskWebhooks.length} webhook Discord!`, 'warn');
-        sendJson({ success: true, message: `Peringatan target berhasil dikirim ke ${taskWebhooks.length} webhook Discord!` });
+        const logMsg = reminderType === 'completed'
+          ? `🎉 Notifikasi target selesai grup "${group.name}" dikirim ke webhook Discord!`
+          : `⚠️ Peringatan target belum tuntas grup "${group.name}" dikirim ke ${taskWebhooks.length} webhook Discord!`;
+        addLog(logMsg, reminderType === 'completed' ? 'success' : 'warn');
+        sendJson({ success: true, message: logMsg });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }

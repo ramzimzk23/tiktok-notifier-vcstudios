@@ -15,7 +15,8 @@ import {
   sendDiscordNotification,
   sendDiscordWarningNotification,
   sendDiscordDoubleUploadWarning,
-  sendDiscordIncompleteWarning
+  sendDiscordIncompleteWarning,
+  sendDiscordTaskCompletedNotification
 } from './notifier.js';
 
 const warnedNotFoundAccounts = new Set();
@@ -24,7 +25,8 @@ const dailyAlertsTracker = {
   doubleUploads: new Set(),
   incompleteWarnings: new Set(),
   reminders10Min: new Set(),
-  deadlineWarnings: new Set()
+  deadlineWarnings: new Set(),
+  completedAlerts: new Set()
 };
 
 let isPolling = false;
@@ -265,6 +267,7 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       dailyAlertsTracker.incompleteWarnings.clear();
       dailyAlertsTracker.reminders10Min.clear();
       dailyAlertsTracker.deadlineWarnings.clear();
+      dailyAlertsTracker.completedAlerts.clear();
       runtimeState.lastPeriodicWarningTimestamps?.clear();
     }
 
@@ -274,10 +277,28 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
 
       const report = generateDailyReportData(group, runtimeState.accountCache);
-      // If task is completed (14 accounts finished), do NOT send any warnings
-      if (report.isCompleted || report.uploadedCount >= 14) continue;
-
       const deadlineStr = (group.taskDeadline || '22:00').trim();
+      const groupKey = `${group.id}:${nowWIB}`;
+
+      // 0. Notifikasi Webhook Jika Target Kuota Harian Sudah Tuntas (Minimal 14 Akun Selesai)
+      if (report.isCompleted || report.uploadedCount >= 14) {
+        if (!dailyAlertsTracker.completedAlerts.has(groupKey)) {
+          dailyAlertsTracker.completedAlerts.add(groupKey);
+          addLog(`🎉 TARGET TUNTAS! Grup "${group.name}" telah menyelesaikan kuota (${report.uploadedCount}/14 akun). Mengirim notifikasi selesai ke Discord...`, 'success');
+          await sendDiscordTaskCompletedNotification(
+            group,
+            group.name,
+            report.uploadedCount,
+            report.target,
+            report.uploaded,
+            {
+              deadlineTime: deadlineStr
+            }
+          );
+        }
+        continue;
+      }
+
       const [dHourStr, dMinStr] = deadlineStr.split(':');
       const dHour = parseInt(dHourStr, 10) || 22;
       const dMin = parseInt(dMinStr, 10) || 0;
@@ -286,8 +307,6 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
       const is10MinEnabled = group.taskReminder10MinEnabled !== false;
       const reminderStartMinutes = Math.max(0, deadlineTotalMinutes - 10);
-
-      const groupKey = `${group.id}:${nowWIB}`;
 
       // 1. 10 Menit Sebelum Deadline (HANYA 1x Peringatan per Hari)
       if (is10MinEnabled && currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes) {

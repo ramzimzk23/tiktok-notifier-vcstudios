@@ -351,6 +351,92 @@ export async function sendDiscordIncompleteWarning(
 }
 
 /**
+ * Send celebratory notification to Discord when daily quota/task is completed (14 accounts finished)
+ * @param {string|object} target Webhook URL or Group object
+ * @param {string} groupName Group name
+ * @param {number} completedCount Total accounts uploaded
+ * @param {number} targetCount Target count (default: 14)
+ * @param {Array} uploadedAccounts List of accounts that uploaded
+ * @param {object} options Options (e.g. deadlineTime)
+ * @returns {Promise<boolean>}
+ */
+export async function sendDiscordTaskCompletedNotification(
+  target,
+  groupName,
+  completedCount,
+  targetCount = 14,
+  uploadedAccounts = [],
+  options = {}
+) {
+  let urls = [];
+  if (typeof target === 'string') {
+    urls = [target.trim()];
+  } else {
+    // Deliver to webhooks subscribed to TASK_WARNING (the remainder channel) and DAILY_REPORT (admin channel)
+    const warningUrls = getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
+    const reportUrls = getWebhooksForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
+    urls = Array.from(new Set([...warningUrls, ...reportUrls]));
+  }
+
+  if (urls.length === 0) {
+    if (target?.url) urls = [target.url.trim()];
+    else if (target?.webhookUrl) urls = [target.webhookUrl.trim()];
+  }
+
+  if (urls.length === 0) {
+    lastWebhookError = 'Tidak ada webhook yang aktif untuk menerima notifikasi selesai';
+    return false;
+  }
+
+  const { deadlineTime = '22:00' } = options;
+  const formattedDeadline = (deadlineTime || '22:00').replace(':', '.');
+
+  const content = `@everyone
+🎉✅ **TARGET KUOTA HARIAN SELESAI!** ✅🎉
+Alhamdulillah, task upload TikTok grup **${groupName}** hari ini SUDAH TUNTAS! (**${completedCount}/${targetCount} Akun**)
+Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
+
+  const topUploaded = (uploadedAccounts || []).slice(0, 14);
+  const uploadedList = topUploaded.map((u, i) => {
+    const acc = typeof u === 'string' ? u : (u.account || u.nickname || 'akun');
+    const url = u.videoUrl ? ` — [Tonton Video](${u.videoUrl})` : '';
+    return `${i + 1}. **@${acc}**${url}`;
+  }).join('\n') || `• ${completedCount} akun telah berhasil mengunggah video.`;
+
+  const extraCount = (uploadedAccounts || []).length > 14 ? (uploadedAccounts.length - 14) : 0;
+  const extraText = extraCount > 0 ? `\n*... dan ${extraCount} video tambahan lainnya*` : '';
+
+  const payload = {
+    username: 'VCStudios Bot',
+    avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
+    content,
+    allowed_mentions: {
+      parse: ['everyone']
+    },
+    embeds: [
+      {
+        title: `🎉 TARGET SELESAI: ${groupName.toUpperCase()} 🎉`,
+        description: `Target kuota harian grup **${groupName}** telah **100% LENGKAP TERCAPAI**!\nSemua target minimal **1 video di ${targetCount} akun** telah terpenuhi sebelum batas report jam **${formattedDeadline} WIB**. 🚀🔥`,
+        color: 0x00ff88, // Radiant Neon Green
+        fields: [
+          { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
+          { name: '🎯 Pencapaian Target', value: `✅ **${completedCount} / ${targetCount} Akun** (100%)`, inline: true },
+          { name: '⏰ Batas Waktu Report', value: `\`${formattedDeadline} WIB\``, inline: true },
+          { name: `✨ Akun yang Telah Selesai Mengunggah (${completedCount} Akun)`, value: uploadedList + extraText, inline: false }
+        ],
+        footer: {
+          text: 'VCStudios • Daily Target Completed',
+          icon_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+        },
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  return await dispatchDiscordPayload(urls, payload, 'Notifikasi Task Selesai');
+}
+
+/**
  * Send Full Formatted Daily Report to Discord
  */
 export async function sendDiscordDailyReport(target, groupName, report) {
