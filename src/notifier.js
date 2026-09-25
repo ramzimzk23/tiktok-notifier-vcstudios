@@ -14,16 +14,43 @@ export const WEBHOOK_EVENTS = {
 export const ALL_WEBHOOK_EVENTS = Object.values(WEBHOOK_EVENTS);
 
 /**
- * Extract active webhook URLs for a specific event
- * @param {string|object|Array} target Single URL, Webhooks array, or Group object
- * @param {string} eventType One of WEBHOOK_EVENTS
- * @returns {string[]} List of valid Discord Webhook URLs that subscribe to eventType
+ * Format the mention prefix based on webhook setting
+ * @param {string} mentionType 'everyone' | 'here' | 'none' | 'role' | 'custom'
+ * @param {string} mentionRole Role ID or custom text
+ * @returns {string} e.g. '@everyone', '@here', '<@&123...>', or ''
  */
-export function getWebhooksForEvent(target, eventType) {
+export function formatMentionTag(mentionType = 'everyone', mentionRole = '') {
+  const m = String(mentionType || 'everyone').trim().toLowerCase();
+  if (m === 'none' || m === 'silent' || m === 'off') {
+    return '';
+  }
+  if (m === 'here') {
+    return '@here';
+  }
+  if (m === 'role') {
+    const r = String(mentionRole || '').trim();
+    if (!r) return '';
+    if (r.startsWith('<@&') || r.startsWith('@')) return r;
+    if (/^\d+$/.test(r)) return `<@&${r}>`;
+    return `@${r}`;
+  }
+  if (m === 'custom') {
+    return String(mentionRole || '').trim();
+  }
+  return '@everyone';
+}
+
+/**
+ * Extract active webhook objects with events and mention settings
+ * @param {string|object|Array} target Single URL, Webhooks array, or Group object
+ * @param {string} eventType One of WEBHOOK_EVENTS (optional)
+ * @returns {Array<{url: string, name: string, events: string[], mention: string, mentionRole: string}>}
+ */
+export function getWebhookTargetsForEvent(target, eventType) {
   if (!target) return [];
   if (typeof target === 'string') {
     const trimmed = target.trim();
-    return trimmed ? [trimmed] : [];
+    return trimmed ? [{ url: trimmed, name: 'Default', events: ALL_WEBHOOK_EVENTS, mention: 'everyone', mentionRole: '' }] : [];
   }
   let list = [];
   if (Array.isArray(target)) {
@@ -31,12 +58,14 @@ export function getWebhooksForEvent(target, eventType) {
   } else if (typeof target === 'object') {
     if (Array.isArray(target.webhooks) && target.webhooks.length > 0) {
       list = target.webhooks;
+    } else if (target.url) {
+      list = [target];
     } else if (target.webhookUrl) {
-      list = [{ url: target.webhookUrl, events: ALL_WEBHOOK_EVENTS }];
+      list = [{ url: target.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS, mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
     }
   }
 
-  const urls = [];
+  const targets = [];
   for (const item of list) {
     if (!item) continue;
     const url = typeof item === 'string' ? item : item.url;
@@ -44,36 +73,90 @@ export function getWebhooksForEvent(target, eventType) {
     const cleanUrl = url.trim();
     if (!cleanUrl) continue;
 
-    // Check events filter
-    if (typeof item === 'object' && Array.isArray(item.events) && item.events.length > 0) {
-      if (item.events.includes(eventType)) {
-        urls.push(cleanUrl);
-      }
-    } else {
-      // Default to subscribing to all events if events array not specified
-      urls.push(cleanUrl);
+    const events = (typeof item === 'object' && Array.isArray(item.events) && item.events.length > 0)
+      ? item.events
+      : ALL_WEBHOOK_EVENTS;
+
+    if (!eventType || events.includes(eventType)) {
+      targets.push({
+        url: cleanUrl,
+        name: typeof item === 'object' ? (item.name || 'Webhook') : 'Webhook',
+        events,
+        mention: typeof item === 'object' ? (item.mention || 'everyone') : 'everyone',
+        mentionRole: typeof item === 'object' ? (item.mentionRole || '') : ''
+      });
     }
   }
 
-  return urls;
+  return targets;
+}
+
+/**
+ * Extract active webhook URLs for a specific event
+ * @param {string|object|Array} target Single URL, Webhooks array, or Group object
+ * @param {string} eventType One of WEBHOOK_EVENTS
+ * @returns {string[]} List of valid Discord Webhook URLs that subscribe to eventType
+ */
+export function getWebhooksForEvent(target, eventType) {
+  return getWebhookTargetsForEvent(target, eventType).map((t) => t.url);
 }
 
 export let lastWebhookError = '';
 
 /**
- * Send a Discord payload to a list of webhook URLs
+ * Send a Discord payload to a list of webhook URLs or targets
  */
-async function dispatchDiscordPayload(urls, payload, eventName = 'Notifikasi') {
-  if (!urls || urls.length === 0) {
+async function dispatchDiscordPayload(targets, payloadOrBuilder, eventName = 'Notifikasi') {
+  let targetList = [];
+  if (Array.isArray(targets)) {
+    targetList = targets.map((t) => {
+      if (typeof t === 'string') {
+        return { url: t.trim(), name: 'Webhook', mention: 'everyone', mentionRole: '' };
+      }
+      return {
+        url: (t?.url || '').trim(),
+        name: t?.name || 'Webhook',
+        mention: t?.mention || 'everyone',
+        mentionRole: t?.mentionRole || ''
+      };
+    }).filter((t) => Boolean(t.url));
+  } else if (typeof targets === 'string' && targets.trim()) {
+    targetList = [{ url: targets.trim(), name: 'Webhook', mention: 'everyone', mentionRole: '' }];
+  } else if (targets && typeof targets === 'object' && targets.url) {
+    targetList = [{
+      url: targets.url.trim(),
+      name: targets.name || 'Webhook',
+      mention: targets.mention || 'everyone',
+      mentionRole: targets.mentionRole || ''
+    }];
+  }
+
+  if (targetList.length === 0) {
     lastWebhookError = 'Tidak ada URL webhook Discord tujuan yang valid';
     return false;
   }
+
   let successCount = 0;
   lastWebhookError = '';
 
-  for (const rawUrl of urls) {
-    const url = (rawUrl || '').trim();
+  for (const targetWh of targetList) {
+    const url = targetWh.url;
     if (!url) continue;
+
+    const mentionTag = formatMentionTag(targetWh.mention, targetWh.mentionRole);
+    let payload;
+    if (typeof payloadOrBuilder === 'function') {
+      payload = payloadOrBuilder(mentionTag, targetWh);
+    } else {
+      payload = { ...payloadOrBuilder };
+      if (typeof payload.content === 'string') {
+        if (mentionTag === '') {
+          payload.content = payload.content.replace(/^@everyone\s*\n?/, '').trim();
+        } else if (mentionTag !== '@everyone') {
+          payload.content = payload.content.replace(/^@everyone/, mentionTag);
+        }
+      }
+    }
 
     try {
       let res = await fetch(url, {
@@ -131,8 +214,8 @@ async function dispatchDiscordPayload(urls, payload, eventName = 'Notifikasi') {
  * @returns {Promise<boolean>}
  */
 export async function sendDiscordNotification(target, user, video, groupName = null) {
-  const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.NEW_VIDEO);
-  if (urls.length === 0) {
+  const targets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.NEW_VIDEO);
+  if (targets.length === 0) {
     return false;
   }
 
@@ -187,15 +270,15 @@ export async function sendDiscordNotification(target, user, video, groupName = n
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Video Baru');
+  return await dispatchDiscordPayload(targets, payload, 'Video Baru');
 }
 
 /**
  * Send Discord Warning Alert (e.g. Account not found / invalid username)
  */
 export async function sendDiscordWarningNotification(target, username, groupName = null, reason = 'Akun tidak ditemukan di TikTok') {
-  const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.ACCOUNT_NOT_FOUND);
-  if (urls.length === 0) return false;
+  const targets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.ACCOUNT_NOT_FOUND);
+  if (targets.length === 0) return false;
 
   const payload = {
     username: 'VCStudios Bot',
@@ -223,15 +306,15 @@ export async function sendDiscordWarningNotification(target, username, groupName
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Peringatan Akun Tidak Ditemukan');
+  return await dispatchDiscordPayload(targets, payload, 'Peringatan Akun Tidak Ditemukan');
 }
 
 /**
  * Send Discord Warning for Double Upload (Account uploaded >1 video in 1 day)
  */
 export async function sendDiscordDoubleUploadWarning(target, groupName, username, uploadCount, latestVideo) {
-  const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.DOUBLE_UPLOAD);
-  if (urls.length === 0) return false;
+  const targets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.DOUBLE_UPLOAD);
+  if (targets.length === 0) return false;
 
   const payload = {
     username: 'VCStudios Bot',
@@ -259,7 +342,7 @@ export async function sendDiscordDoubleUploadWarning(target, groupName, username
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Peringatan Double Upload');
+  return await dispatchDiscordPayload(targets, payload, 'Peringatan Double Upload');
 }
 
 /**
@@ -278,15 +361,15 @@ export async function sendDiscordIncompleteWarning(
   // If 14 or more accounts have uploaded and not a test run -> Do not send warning!
   if (!isTest && completedCount >= targetCount) return false;
 
-  let urls = typeof target === 'string'
-    ? [target.trim()]
-    : getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
+  let targets = typeof target === 'string'
+    ? [{ url: target.trim(), mention: 'everyone', mentionRole: '' }]
+    : getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
 
-  if (urls.length === 0 && isTest) {
-    if (target?.url) urls = [target.url.trim()];
-    else if (target?.webhookUrl) urls = [target.webhookUrl.trim()];
+  if (targets.length === 0 && isTest) {
+    if (target?.url) targets = [{ url: target.url.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
+    else if (target?.webhookUrl) targets = [{ url: target.webhookUrl.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
   }
-  if (urls.length === 0) {
+  if (targets.length === 0) {
     lastWebhookError = 'Tidak ada webhook yang aktif untuk menerima peringatan task';
     return false;
   }
@@ -346,7 +429,7 @@ export async function sendDiscordIncompleteWarning(
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, `Peringatan Target (${reminderType})`);
+  return await dispatchDiscordPayload(targets, payload, `Peringatan Target (${reminderType})`);
 }
 
 /**
@@ -367,22 +450,28 @@ export async function sendDiscordTaskCompletedNotification(
   uploadedAccounts = [],
   options = {}
 ) {
-  let urls = [];
+  let targets = [];
   if (typeof target === 'string') {
-    urls = [target.trim()];
+    targets = [{ url: target.trim(), mention: 'everyone', mentionRole: '' }];
   } else {
     // Deliver to webhooks subscribed to TASK_WARNING (the remainder channel) and DAILY_REPORT (admin channel)
-    const warningUrls = getWebhooksForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
-    const reportUrls = getWebhooksForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
-    urls = Array.from(new Set([...warningUrls, ...reportUrls]));
+    const warningTargets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
+    const reportTargets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
+    const seenUrls = new Set();
+    for (const t of [...warningTargets, ...reportTargets]) {
+      if (!seenUrls.has(t.url)) {
+        seenUrls.add(t.url);
+        targets.push(t);
+      }
+    }
   }
 
-  if (urls.length === 0) {
-    if (target?.url) urls = [target.url.trim()];
-    else if (target?.webhookUrl) urls = [target.webhookUrl.trim()];
+  if (targets.length === 0) {
+    if (target?.url) targets = [{ url: target.url.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
+    else if (target?.webhookUrl) targets = [{ url: target.webhookUrl.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
   }
 
-  if (urls.length === 0) {
+  if (targets.length === 0) {
     lastWebhookError = 'Tidak ada webhook yang aktif untuk menerima notifikasi selesai';
     return false;
   }
@@ -410,7 +499,7 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
     avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
     content,
     allowed_mentions: {
-      parse: ['everyone']
+      parse: ['everyone', 'roles', 'users']
     },
     embeds: [
       {
@@ -432,15 +521,15 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥`;
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Notifikasi Task Selesai');
+  return await dispatchDiscordPayload(targets, payload, 'Notifikasi Task Selesai');
 }
 
 /**
  * Send Full Formatted Daily Report to Discord
  */
 export async function sendDiscordDailyReport(target, groupName, report) {
-  const urls = getWebhooksForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
-  if (urls.length === 0) return false;
+  const targets = getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.DAILY_REPORT);
+  if (targets.length === 0) return false;
 
   const uploadedList = (report.uploaded || []).map((u, i) => `${i + 1}. **@${u.account}** — [Tonton Video](${u.videoUrl})`).join('\n') || '(Belum ada akun upload hari ini)';
   const remainingNeeded = Math.max(0, (report.target || 14) - (report.uploadedCount || 0));
@@ -452,7 +541,7 @@ export async function sendDiscordDailyReport(target, groupName, report) {
     avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
     content: `@everyone 📊 **DAILY REPORT CLIPPERS — ${groupName.toUpperCase()}** (${report.date})`,
     allowed_mentions: {
-      parse: ['everyone']
+      parse: ['everyone', 'roles', 'users']
     },
     embeds: [
       {
@@ -475,55 +564,58 @@ export async function sendDiscordDailyReport(target, groupName, report) {
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Daily Report');
+  return await dispatchDiscordPayload(targets, payload, 'Daily Report');
 }
 
 /**
  * Send Test Ping to Discord Webhook
  */
 export async function sendDiscordTestPing(target, groupName = 'Grup') {
-  let urls = [];
+  let targets = [];
   if (typeof target === 'string') {
     const trimmed = target.trim();
-    if (trimmed) urls = [trimmed];
+    if (trimmed) targets = [{ url: trimmed, mention: 'everyone' }];
   } else if (Array.isArray(target)) {
-    urls = target.map((t) => (typeof t === 'string' ? t.trim() : t?.url?.trim())).filter(Boolean);
+    targets = target.map((t) => (typeof t === 'string' ? { url: t.trim(), mention: 'everyone' } : t)).filter((t) => t && t.url);
   } else if (typeof target === 'object' && target !== null) {
     if (target.url) {
-      urls = [target.url.trim()];
+      targets = [target];
     } else if (Array.isArray(target.webhooks) && target.webhooks.length > 0) {
-      urls = target.webhooks.map((w) => (typeof w === 'string' ? w.trim() : w?.url?.trim())).filter(Boolean);
+      targets = target.webhooks.filter((w) => w && w.url);
     } else if (target.webhookUrl) {
-      urls = [target.webhookUrl.trim()];
+      targets = [{ url: target.webhookUrl.trim(), mention: 'everyone' }];
     }
   }
 
-  if (urls.length === 0) {
+  if (targets.length === 0) {
     lastWebhookError = 'URL webhook Discord tidak ditemukan atau kosong';
     return false;
   }
 
-  const payload = {
-    username: 'VCStudios Bot',
-    avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
-    embeds: [
-      {
-        title: '🧪 Webhook Connected Successfully!',
-        description: `Webhook Discord untuk grup **${groupName}** berhasil terhubung dan siap menerima notifikasi otomatis.`,
-        color: 0x25f4ee,
-        fields: [
-          { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
-          { name: '⚡ Status', value: '✅ Aktif & Terverifikasi', inline: true }
-        ],
-        footer: {
-          text: 'VCStudios • TikTok Notifier',
-          icon_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
-        },
-        timestamp: new Date().toISOString()
-      }
-    ]
-  };
-
-  return await dispatchDiscordPayload(urls, payload, 'Tes Webhook Ping');
+  return await dispatchDiscordPayload(targets, (t) => {
+    const mentionTag = formatMentionTag(t.mention, t.mentionRole);
+    return {
+      content: mentionTag ? `${mentionTag} 🧪 **Tes Webhook**` : undefined,
+      username: 'VCStudios Bot',
+      avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
+      embeds: [
+        {
+          title: '🧪 Webhook Connected Successfully!',
+          description: `Webhook Discord untuk grup **${groupName}** berhasil terhubung dan siap menerima notifikasi otomatis.`,
+          color: 0x25f4ee,
+          fields: [
+            { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
+            { name: '⚡ Status', value: '✅ Aktif & Terverifikasi', inline: true },
+            { name: '📢 Pengaturan Mention', value: mentionTag ? `\`${mentionTag}\`` : '🔕 *Hening (Tanpa Mention)*', inline: true }
+          ],
+          footer: {
+            text: 'VCStudios • TikTok Notifier',
+            icon_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+          },
+          timestamp: new Date().toISOString()
+        }
+      ]
+    };
+  }, 'Tes Webhook Ping');
 }
 

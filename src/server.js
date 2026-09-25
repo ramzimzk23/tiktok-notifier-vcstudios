@@ -504,6 +504,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
+        // Find existing webhook in group if available to preserve its mention settings
+        const matchedWebhook = group?.webhooks?.find((w) => w.url === testUrl);
+        const mention = (body.mention || matchedWebhook?.mention || 'everyone').trim();
+        const mentionRole = (body.mentionRole !== undefined ? body.mentionRole : (matchedWebhook?.mentionRole || '')).trim();
+        const testTarget = { url: testUrl, mention, mentionRole };
+
         const events = Array.isArray(body.events) ? body.events : null;
         const isTaskWarningTest = body.eventType === 'task_warning' ||
           Boolean(body.isTaskWarningOnly) ||
@@ -514,7 +520,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         if (isTaskWarningTest) {
           addLog(`Mengirim simulasi tes peringatan task ke webhook "${group?.name || 'Discord'}"...`, 'info');
           sent = await sendDiscordIncompleteWarning(
-            testUrl,
+            testTarget,
             group?.name || 'Grup Saluran',
             12,
             14,
@@ -533,12 +539,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
             // Check memory cache first for immediate response
             const cached = runtimeState.accountCache?.[username.toLowerCase()];
             if (cached && cached.videos && cached.videos.length > 0) {
-              sent = await sendDiscordNotification(testUrl, cached.user, cached.videos[0], group?.name || 'Tes Webhook');
+              sent = await sendDiscordNotification(testTarget, cached.user, cached.videos[0], group?.name || 'Tes Webhook');
             }
             if (!sent) {
               const result = await getTikTokUserVideos(username);
               if (result.success && result.videos && result.videos.length > 0) {
-                sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+                sent = await sendDiscordNotification(testTarget, result.user, result.videos[0], group?.name || 'Tes Webhook');
               }
             }
           }
@@ -546,7 +552,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           // If no username or video fetch failed, send direct test ping embed
           if (!sent) {
             addLog(`Mengirim pesan tes koneksi langsung ke webhook "${group?.name || 'Discord'}"...`, 'info');
-            sent = await sendDiscordTestPing(testUrl, group?.name || 'Tes Webhook');
+            sent = await sendDiscordTestPing(testTarget, group?.name || 'Tes Webhook');
           }
         }
 
@@ -575,6 +581,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           .map((w) => ({
             url: w.url.trim(),
             name: (w.name || '').trim(),
+            mention: (w.mention || 'everyone').trim(),
+            mentionRole: (w.mentionRole || '').trim(),
             events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
           }));
 
@@ -583,6 +591,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           webhooks.push({
             url: fallbackUrl,
             name: 'Default',
+            mention: (body.mention || 'everyone').trim(),
+            mentionRole: (body.mentionRole || '').trim(),
             events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
           });
         }
@@ -642,13 +652,21 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
             .map((w) => ({
               url: w.url.trim(),
               name: (w.name || '').trim(),
+              mention: (w.mention || 'everyone').trim(),
+              mentionRole: (w.mentionRole || '').trim(),
               events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
             }));
           group.webhookUrl = group.webhooks[0]?.url || '';
         } else if (body.webhookUrl !== undefined) {
           group.webhookUrl = body.webhookUrl.trim();
           if (group.webhookUrl) {
-            group.webhooks = [{ url: group.webhookUrl, name: 'Default', events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'] }];
+            group.webhooks = [{
+              url: group.webhookUrl,
+              name: 'Default',
+              mention: (body.mention || 'everyone').trim(),
+              mentionRole: (body.mentionRole || '').trim(),
+              events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
+            }];
           } else {
             group.webhooks = [];
           }

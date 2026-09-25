@@ -65,11 +65,23 @@ async function readLocalConfig() {
       let webhooks = [];
       let primaryUrl = '';
       if (Array.isArray(g.webhooks) && g.webhooks.length > 0) {
-        webhooks = g.webhooks;
+        webhooks = g.webhooks.map((w) => ({
+          url: (w.url || '').trim(),
+          name: (w.name || 'Default').trim(),
+          events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ALL_WEBHOOK_EVENTS,
+          mention: (w.mention || 'everyone').trim(),
+          mentionRole: (w.mentionRole || '').trim()
+        }));
         primaryUrl = webhooks[0]?.url || g.webhookUrl || '';
       } else if (g.webhookUrl) {
         primaryUrl = g.webhookUrl;
-        webhooks = [{ url: g.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+        webhooks = [{
+          url: g.webhookUrl,
+          name: 'Default',
+          events: ALL_WEBHOOK_EVENTS,
+          mention: (g.mention || 'everyone').trim(),
+          mentionRole: (g.mentionRole || '').trim()
+        }];
       }
       return {
         ...g,
@@ -414,9 +426,22 @@ export async function getFullConfig() {
             try {
               const parsed = JSON.parse(g.webhook_url);
               if (Array.isArray(parsed)) {
-                webhooks = parsed;
+                webhooks = parsed.map((w) => ({
+                  url: (w.url || '').trim(),
+                  name: (w.name || 'Default').trim(),
+                  events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ALL_WEBHOOK_EVENTS,
+                  mention: (w.mention || 'everyone').trim(),
+                  mentionRole: (w.mentionRole || '').trim()
+                }));
               } else if (parsed && typeof parsed === 'object') {
-                webhooks = Array.isArray(parsed.webhooks) ? parsed.webhooks : [];
+                const list = Array.isArray(parsed.webhooks) ? parsed.webhooks : [];
+                webhooks = list.map((w) => ({
+                  url: (w.url || '').trim(),
+                  name: (w.name || 'Default').trim(),
+                  events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ALL_WEBHOOK_EVENTS,
+                  mention: (w.mention || 'everyone').trim(),
+                  mentionRole: (w.mentionRole || '').trim()
+                }));
                 if (parsed.taskDeadline) taskDeadline = parsed.taskDeadline;
                 if (parsed.taskWarningIntervalMinutes !== undefined) taskWarningIntervalMinutes = Number(parsed.taskWarningIntervalMinutes);
                 if (parsed.taskReminder10MinEnabled !== undefined) taskReminder10MinEnabled = Boolean(parsed.taskReminder10MinEnabled);
@@ -426,11 +451,11 @@ export async function getFullConfig() {
               primaryWebhookUrl = webhooks[0]?.url || '';
             } catch {
               primaryWebhookUrl = g.webhook_url;
-              webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+              webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS, mention: 'everyone', mentionRole: '' }];
             }
           } else {
             primaryWebhookUrl = g.webhook_url;
-            webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+            webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS, mention: 'everyone', mentionRole: '' }];
           }
         }
 

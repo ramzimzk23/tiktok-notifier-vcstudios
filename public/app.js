@@ -435,6 +435,18 @@ function renderGroupBanner(group) {
           if (evts.includes('account_not_found')) badgesHtml += '<span class="webhook-event-badge badge-account" title="Peringatan akun tiktok tidak ditemukan">🔍 Akun</span>';
         }
 
+        const mType = wh.mention || 'everyone';
+        if (mType === 'everyone') {
+          badgesHtml += '<span class="webhook-event-badge badge-mention" title="Mention Discord: @everyone">🔔 @everyone</span>';
+        } else if (mType === 'here') {
+          badgesHtml += '<span class="webhook-event-badge badge-mention" title="Mention Discord: @here">🔔 @here</span>';
+        } else if (mType === 'role') {
+          const roleDisplay = wh.mentionRole ? `@Role (${wh.mentionRole})` : '@Role';
+          badgesHtml += `<span class="webhook-event-badge badge-mention" title="Mention Discord Role">🏷️ ${escapeHtml(roleDisplay)}</span>`;
+        } else if (mType === 'none') {
+          badgesHtml += '<span class="webhook-event-badge badge-mention-none" title="Tanpa Mention (Hening)">🔕 Tanpa Tag</span>';
+        }
+
         const displayName = wh.name ? wh.name : (webhooks.length > 1 ? `Webhook #${idx + 1}` : 'Discord Webhook');
 
         return `
@@ -445,7 +457,7 @@ function renderGroupBanner(group) {
               <div class="banner-webhook-badges">${badgesHtml}</div>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
-              <button type="button" class="btn btn-xs btn-outline" style="padding: 2px 8px; font-size: 0.72rem; gap: 4px;" onclick="testSingleWebhook('${group.id}', '${encodeURIComponent(wh.url)}')">
+              <button type="button" class="btn btn-xs btn-outline" style="padding: 2px 8px; font-size: 0.72rem; gap: 4px;" onclick="testSingleWebhook('${group.id}', '${encodeURIComponent(wh.url)}', null, '${wh.mention || 'everyone'}', '${encodeURIComponent(wh.mentionRole || '')}')">
                 <span>🧪 Tes</span>
               </button>
             </div>
@@ -1267,7 +1279,7 @@ document.getElementById('form-add-account').addEventListener('submit', async (e)
 const ALL_EVENT_KEYS = ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'];
 let modalWebhooks = [];
 
-async function testSingleWebhook(groupId, encodedUrl, passedEvents = null) {
+async function testSingleWebhook(groupId, encodedUrl, passedEvents = null, passedMention = null, passedMentionRole = null) {
   const webhookUrl = decodeURIComponent(encodedUrl || '');
   if (!webhookUrl) {
     showToast('URL Webhook tidak valid', true);
@@ -1275,11 +1287,16 @@ async function testSingleWebhook(groupId, encodedUrl, passedEvents = null) {
   }
 
   let events = passedEvents;
-  if (!events && groupId && currentStatus?.config?.groups) {
+  let mention = passedMention;
+  let mentionRole = passedMentionRole ? decodeURIComponent(passedMentionRole) : null;
+
+  if (groupId && currentStatus?.config?.groups) {
     const grp = currentStatus.config.groups.find((g) => g.id === groupId);
     const whObj = grp?.webhooks?.find((w) => w.url === webhookUrl);
-    if (whObj?.events) {
-      events = whObj.events;
+    if (whObj) {
+      if (!events && whObj.events) events = whObj.events;
+      if (!mention && whObj.mention) mention = whObj.mention;
+      if (mentionRole === null && whObj.mentionRole) mentionRole = whObj.mentionRole;
     }
   }
 
@@ -1287,15 +1304,19 @@ async function testSingleWebhook(groupId, encodedUrl, passedEvents = null) {
 
   try {
     showToast(isTaskOnly ? 'Mengirim tes peringatan task ke webhook Discord...' : 'Mengirim pesan tes ke webhook Discord...');
+    const bodyPayload = {
+      groupId,
+      webhookUrl,
+      events: Array.isArray(events) ? events : undefined,
+      isTaskWarningOnly: isTaskOnly
+    };
+    if (mention) bodyPayload.mention = mention;
+    if (mentionRole) bodyPayload.mentionRole = mentionRole;
+
     const res = await authFetch('/api/test-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        groupId,
-        webhookUrl,
-        events: Array.isArray(events) ? events : undefined,
-        isTaskWarningOnly: isTaskOnly
-      })
+      body: JSON.stringify(bodyPayload)
     });
     const data = await res.json();
     if (data.success) {
@@ -1317,6 +1338,8 @@ function renderModalWebhooks() {
     modalWebhooks = [{
       url: '',
       name: 'Webhook Utama',
+      mention: 'everyone',
+      mentionRole: '',
       events: [...ALL_EVENT_KEYS]
     }];
   }
@@ -1328,6 +1351,8 @@ function renderModalWebhooks() {
     const isDoubleUpload = events.includes('double_upload');
     const isDailyReport = events.includes('daily_report');
     const isAccountNotFound = events.includes('account_not_found');
+    const mentionType = wh.mention || 'everyone';
+    const isRole = mentionType === 'role';
 
     return `
       <div class="wh-compact-card" data-idx="${idx}">
@@ -1354,6 +1379,23 @@ function renderModalWebhooks() {
 
         <div class="wh-url-field-wrap">
           <input type="url" class="wh-url-input-compact" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(wh.url || '')}" oninput="updateModalWebhookField(${idx}, 'url', this.value)" required>
+        </div>
+
+        <div class="wh-mention-row">
+          <div class="wh-mention-left">
+            <span class="wh-mention-label">📢 Mention:</span>
+            <select class="wh-mention-select" onchange="updateModalWebhookMentionType(${idx}, this.value)">
+              <option value="everyone" ${mentionType === 'everyone' ? 'selected' : ''}>@everyone (Default)</option>
+              <option value="here" ${mentionType === 'here' ? 'selected' : ''}>@here</option>
+              <option value="role" ${mentionType === 'role' ? 'selected' : ''}>@Role (ID Role Discord)</option>
+              <option value="none" ${mentionType === 'none' ? 'selected' : ''}>Tanpa Mention (Hening)</option>
+            </select>
+          </div>
+          ${isRole ? `
+            <div class="wh-mention-role-wrap">
+              <input type="text" class="wh-mention-role-input" placeholder="ID Role (contoh: 123456789012345678)" value="${escapeHtml(wh.mentionRole || '')}" oninput="updateModalWebhookField(${idx}, 'mentionRole', this.value)" title="Masukkan ID Role Discord">
+            </div>
+          ` : ''}
         </div>
 
         <div class="wh-events-toolbar">
@@ -1435,6 +1477,13 @@ function toggleModalWebhookEvent(idx, eventKey, isChecked) {
 }
 window.toggleModalWebhookEvent = toggleModalWebhookEvent;
 
+function updateModalWebhookMentionType(idx, type) {
+  if (!modalWebhooks[idx]) return;
+  modalWebhooks[idx].mention = type;
+  renderModalWebhooks();
+}
+window.updateModalWebhookMentionType = updateModalWebhookMentionType;
+
 function updateModalWebhookField(idx, field, value) {
   if (!modalWebhooks[idx]) return;
   modalWebhooks[idx][field] = value;
@@ -1455,7 +1504,7 @@ async function testModalWebhook(idx) {
     return;
   }
   const groupId = document.getElementById('group-modal-id')?.value || activeGroupId;
-  testSingleWebhook(groupId, encodeURIComponent(wh.url), wh.events);
+  testSingleWebhook(groupId, encodeURIComponent(wh.url), wh.events, wh.mention || 'everyone', wh.mentionRole || '');
 }
 window.testModalWebhook = testModalWebhook;
 
@@ -1467,6 +1516,8 @@ if (btnAddModalWebhook) {
     modalWebhooks.push({
       url: '',
       name: `Webhook #${modalWebhooks.length + 1}`,
+      mention: 'everyone',
+      mentionRole: '',
       events: [...ALL_EVENT_KEYS]
     });
     renderModalWebhooks();
@@ -1484,6 +1535,8 @@ document.getElementById('btn-create-group').addEventListener('click', () => {
   modalWebhooks = [{
     url: '',
     name: 'Webhook Utama',
+    mention: 'everyone',
+    mentionRole: '',
     events: [...ALL_EVENT_KEYS]
   }];
   renderModalWebhooks();
@@ -1503,17 +1556,27 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-reminder-enabled').checked = currentGroup.taskReminderEnabled !== false;
 
   if (Array.isArray(currentGroup.webhooks) && currentGroup.webhooks.length > 0) {
-    modalWebhooks = JSON.parse(JSON.stringify(currentGroup.webhooks));
+    modalWebhooks = currentGroup.webhooks.map((w) => ({
+      url: w.url || '',
+      name: w.name || '',
+      mention: w.mention || 'everyone',
+      mentionRole: w.mentionRole || '',
+      events: Array.isArray(w.events) && w.events.length > 0 ? [...w.events] : [...ALL_EVENT_KEYS]
+    }));
   } else if (currentGroup.webhookUrl) {
     modalWebhooks = [{
       url: currentGroup.webhookUrl,
       name: 'Default',
+      mention: currentGroup.mention || 'everyone',
+      mentionRole: currentGroup.mentionRole || '',
       events: [...ALL_EVENT_KEYS]
     }];
   } else {
     modalWebhooks = [{
       url: '',
       name: 'Webhook Utama',
+      mention: 'everyone',
+      mentionRole: '',
       events: [...ALL_EVENT_KEYS]
     }];
   }
@@ -1539,6 +1602,8 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
     .map((w) => ({
       url: w.url.trim(),
       name: (w.name || '').trim(),
+      mention: (w.mention || 'everyone').trim(),
+      mentionRole: (w.mentionRole || '').trim(),
       events: Array.isArray(w.events) && w.events.length > 0 ? w.events : [...ALL_EVENT_KEYS]
     }));
 
