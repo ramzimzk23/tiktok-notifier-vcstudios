@@ -96,12 +96,14 @@ async function readLocalConfig() {
       };
     });
     return {
+      appUrl: parsed.appUrl || process.env.APP_URL || '',
       checkIntervalSeconds: parsed.checkIntervalSeconds || 120,
       delayBetweenAccountsMs: parsed.delayBetweenAccountsMs || 2000,
       groups
     };
   } catch {
     return {
+      appUrl: process.env.APP_URL || '',
       checkIntervalSeconds: 120,
       delayBetweenAccountsMs: 2000,
       groups: []
@@ -477,7 +479,9 @@ export async function getFullConfig() {
         };
       });
 
+      const local = await readLocalConfig();
       const fullConfig = {
+        appUrl: local.appUrl || process.env.APP_URL || '',
         checkIntervalSeconds: settingsData?.check_interval_seconds || 120,
         delayBetweenAccountsMs: settingsData?.delay_between_accounts_ms || 2000,
         groups
@@ -498,7 +502,7 @@ export async function getFullConfig() {
 /**
  * Save / Update Global Settings
  */
-export async function saveSettings(intervalSeconds, delayMs) {
+export async function saveSettings(intervalSeconds, delayMs, appUrl = undefined) {
   if (isSupabaseActive && supabaseClient) {
     try {
       await supabaseClient
@@ -517,6 +521,7 @@ export async function saveSettings(intervalSeconds, delayMs) {
   const local = await readLocalConfig();
   if (intervalSeconds) local.checkIntervalSeconds = intervalSeconds;
   if (delayMs) local.delayBetweenAccountsMs = delayMs;
+  if (appUrl !== undefined) local.appUrl = appUrl;
   await writeLocalConfig(local);
 }
 

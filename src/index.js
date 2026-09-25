@@ -176,6 +176,10 @@ export async function runPoll(isManual = false) {
 
       await Promise.allSettled(batchPromises);
 
+      // Instant Check: Begitu akun di batch ini selesai dicek, jika grup telah mencapai kuota 14 video,
+      // kirim webhook selesai SEKETIKA tanpa menunggu poller selesai atau jeda 30 menit!
+      await checkCompletedGroupsInstant(groups);
+
       // Pacing delay between batches
       if (i + BATCH_CONCURRENCY < queue.length) {
         const jitter = Math.floor(Math.random() * 300) + 100;
@@ -211,6 +215,8 @@ export async function runPoll(isManual = false) {
       }
     }
 
+    await checkCompletedGroupsInstant(groups);
+
     // Persist cache to disk if updated
     if (cacheDirty) {
       await writeLocalCache(runtimeState.accountCache);
@@ -234,6 +240,55 @@ export async function runPoll(isManual = false) {
     nextPollTimer = setTimeout(() => {
       runPoll(false);
     }, intervalSeconds * 1000);
+  }
+}
+
+/**
+ * Instantly check if any group has reached its target quota (minimal 14 akun selesai upload).
+ * Jika ada grup yang mencapai 14 video, langsung kirim webhook perayaan SEGERA
+ * tanpa menunggu interval poller atau timer reminder 30 menit!
+ */
+export async function checkCompletedGroupsInstant(groups) {
+  try {
+    const now = new Date();
+    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+
+    for (const group of groups) {
+      const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
+      if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
+
+      const groupKey = `${group.id}:${nowWIB}`;
+      if (dailyAlertsTracker.completedAlerts.has(groupKey)) continue;
+
+      const report = generateDailyReportData(group, runtimeState.accountCache);
+      const targetCount = report.target || (group.accounts?.length > 0 ? Math.min(14, group.accounts.length) : 14);
+      const isGroupFinished = report.isCompleted || report.uploadedCount >= targetCount || (group.accounts.length > 0 && report.missing.length === 0);
+
+      if (isGroupFinished) {
+        addLog(`🎉 TARGET KUOTA TUNTAS! Grup "${group.name}" telah mengumpulkan ${report.uploadedCount}/${targetCount} akun (14 video tuntas). Mengirim webhook selesai secara instan ke Discord...`, 'success');
+        const deadlineStr = (group.taskDeadline || '22:00').trim();
+        const reportUrl = getReportUrl(group.id, 0);
+        const sent = await sendDiscordTaskCompletedNotification(
+          group,
+          group.name,
+          report.uploadedCount,
+          targetCount,
+          report.uploaded,
+          {
+            deadlineTime: deadlineStr,
+            reportUrl
+          }
+        );
+        if (sent) {
+          dailyAlertsTracker.completedAlerts.add(groupKey);
+          addLog(`✅ Notifikasi target tuntas (14 video) berhasil dikirim ke Discord grup "${group.name}"!`, 'success');
+        } else {
+          addLog(`⚠️ Gagal mengirim notifikasi selesai ke Discord "${group.name}". Akan dicoba ulang segera.`, 'warn');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[InstantCompletion] Error checking completed groups:', err.message);
   }
 }
 
@@ -271,6 +326,9 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       runtimeState.lastPeriodicWarningTimestamps?.clear();
     }
 
+    // 0. Periksa penyelesaian target secara instan untuk semua grup
+    await checkCompletedGroupsInstant(groups);
+
     for (const group of groups) {
       if (group.taskReminderEnabled === false && !isManual) continue;
       const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
@@ -280,33 +338,11 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       const deadlineStr = (group.taskDeadline || '22:00').trim();
       const groupKey = `${group.id}:${nowWIB}`;
 
-      // 0. Notifikasi Webhook Jika Target Kuota Harian Sudah Tuntas (Minimal 14 Akun atau Semua Akun Selesai)
       const targetCount = report.target || (group.accounts?.length > 0 ? Math.min(14, group.accounts.length) : 14);
       const isGroupFinished = report.isCompleted || report.uploadedCount >= targetCount || (group.accounts.length > 0 && report.missing.length === 0);
 
+      // JIKA SUDAH SELESAI (14 Video): STOP! Jangan kirim reminder/peringatan apapun lagi untuk grup ini hari ini.
       if (isGroupFinished) {
-        if (!dailyAlertsTracker.completedAlerts.has(groupKey)) {
-          addLog(`🎉 TARGET TUNTAS! Grup "${group.name}" telah menyelesaikan kuota (${report.uploadedCount}/${targetCount} akun). Mengirim notifikasi selesai ke Discord...`, 'success');
-          const reportUrl = getReportUrl(group.id, 0);
-          const sent = await sendDiscordTaskCompletedNotification(
-            group,
-            group.name,
-            report.uploadedCount,
-            targetCount,
-            report.uploaded,
-            {
-              deadlineTime: deadlineStr,
-              reportUrl
-            }
-          );
-          if (sent) {
-            dailyAlertsTracker.completedAlerts.add(groupKey);
-            addLog(`✅ Notifikasi selesai kuota berhasil dikirim ke Discord grup "${group.name}"!`, 'success');
-          } else {
-            addLog(`⚠️ Gagal mengirim notifikasi selesai ke Discord grup "${group.name}". Akan dicoba ulang pada siklus berikutnya.`, 'warn');
-          }
-        }
-        // JIKA SUDAH SELESAI: STOP! Jangan kirim reminder/peringatan apapun lagi untuk grup ini hari ini.
         continue;
       }
 

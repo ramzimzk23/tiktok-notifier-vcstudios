@@ -1753,6 +1753,10 @@ document.getElementById('btn-open-settings').addEventListener('click', () => {
   if (currentStatus && currentStatus.config) {
     document.getElementById('setting-interval').value = currentStatus.config.checkIntervalSeconds || 120;
     document.getElementById('setting-delay').value = currentStatus.config.delayBetweenAccountsMs || 2000;
+    const appUrlInput = document.getElementById('setting-app-url');
+    if (appUrlInput) {
+      appUrlInput.value = currentStatus.config.appUrl || '';
+    }
   }
   settingsModal.classList.add('active');
 });
@@ -1768,12 +1772,13 @@ document.getElementById('form-settings').addEventListener('submit', async (e) =>
   e.preventDefault();
   const checkIntervalSeconds = Number(document.getElementById('setting-interval').value);
   const delayBetweenAccountsMs = Number(document.getElementById('setting-delay').value);
+  const appUrl = (document.getElementById('setting-app-url')?.value || '').trim();
 
   try {
     const res = await authFetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkIntervalSeconds, delayBetweenAccountsMs })
+      body: JSON.stringify({ checkIntervalSeconds, delayBetweenAccountsMs, appUrl })
     });
     const data = await res.json();
     if (data.success) {

@@ -47,7 +47,8 @@ export const runtimeState = {
   nextPollTime: null,
   logs: [],
   accountCache: {},
-  lastPeriodicWarningTimestamps: new Map()
+  lastPeriodicWarningTimestamps: new Map(),
+  appUrl: process.env.APP_URL || ''
 };
 
 export function addLog(message, type = 'info') {
@@ -212,7 +213,7 @@ export function generateDailyReportData(group, accountCache = {}, offsetDays = 0
  * Generate accessible public URL for the interactive daily report page
  */
 export function getReportUrl(groupId = '', offsetDays = 0) {
-  const base = process.env.APP_URL || runtimeState.baseUrl || `http://localhost:${process.env.PORT || 3000}`;
+  const base = runtimeState.appUrl || process.env.APP_URL || (runtimeState.baseUrl && !runtimeState.baseUrl.includes('localhost') ? runtimeState.baseUrl : null) || process.env.APP_URL || runtimeState.baseUrl || `http://localhost:${process.env.PORT || 3000}`;
   const cleanBase = base.replace(/\/+$/, '');
   const params = [];
   if (groupId) params.push(`group=${encodeURIComponent(groupId)}`);
@@ -265,9 +266,16 @@ function recordLoginAttempt(ip, success) {
 }
 
 export function createWebServer(port = 3000, triggerPollCallback = null) {
+  getFullConfig().then((cfg) => {
+    if (cfg?.appUrl) {
+      runtimeState.appUrl = cfg.appUrl;
+      process.env.APP_URL = cfg.appUrl;
+    }
+  }).catch(() => {});
+
   const server = http.createServer(async (req, res) => {
     // Dynamically capture the public host so generated report URLs are always accessible
-    if (req.headers.host && !process.env.APP_URL) {
+    if (req.headers.host && !process.env.APP_URL && !runtimeState.appUrl) {
       const proto = req.headers['x-forwarded-proto'] || (req.connection?.encrypted ? 'https' : 'http');
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       runtimeState.baseUrl = `${proto}://${host}`;
@@ -1061,10 +1069,16 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         const body = await parseBody();
         const interval = body.checkIntervalSeconds ? Math.max(30, Number(body.checkIntervalSeconds)) : 120;
         const delay = body.delayBetweenAccountsMs ? Math.max(500, Number(body.delayBetweenAccountsMs)) : 2000;
+        const appUrl = typeof body.appUrl === 'string' ? body.appUrl.trim() : (body.appUrl === '' ? '' : undefined);
 
-        await saveSettings(interval, delay);
-        addLog(`Pengaturan interval diperbarui (${interval}s, delay: ${delay}ms)`, 'success');
-        sendJson({ success: true });
+        if (appUrl !== undefined) {
+          runtimeState.appUrl = appUrl;
+          process.env.APP_URL = appUrl;
+        }
+
+        await saveSettings(interval, delay, appUrl);
+        addLog(`Pengaturan poller diperbarui (${interval}s, delay: ${delay}ms${appUrl ? `, URL Publik: ${appUrl}` : ''})`, 'success');
+        sendJson({ success: true, appUrl: runtimeState.appUrl });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
       }
