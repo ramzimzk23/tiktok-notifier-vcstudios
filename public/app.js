@@ -1637,6 +1637,10 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
     return;
   }
 
+  const isEdit = !!id;
+  const url = isEdit ? `/api/groups/${id}` : '/api/groups';
+  const method = isEdit ? 'PUT' : 'POST';
+
   const taskReminderStartTime = document.getElementById('group-modal-reminder-start')?.value || '09:00';
   const taskDeadline = document.getElementById('group-modal-deadline')?.value || '22:00';
   const taskWarningIntervalMinutes = Number(document.getElementById('group-modal-warning-interval')?.value || 30);
