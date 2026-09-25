@@ -27,6 +27,21 @@ export function formatMentionTag(mentionType = 'everyone', mentionRole = '') {
   if (m === 'here') {
     return '@here';
   }
+  if (m === 'user') {
+    const u = String(mentionRole || '').trim();
+    if (!u) return '';
+    const parts = u.split(/[\s,]+/).filter(Boolean);
+    if (parts.length > 1) {
+      return parts.map((p) => {
+        if (p.startsWith('<@') || p.startsWith('@')) return p;
+        if (/^\d+$/.test(p)) return `<@${p}>`;
+        return `@${p}`;
+      }).join(' ');
+    }
+    if (u.startsWith('<@') || u.startsWith('@')) return u;
+    if (/^\d+$/.test(u)) return `<@${u}>`;
+    return `@${u}`;
+  }
   if (m === 'role') {
     const r = String(mentionRole || '').trim();
     if (!r) return '';

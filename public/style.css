@@ -2337,6 +2337,12 @@ body {
   color: #8ea1e1;
 }
 
+.webhook-event-badge.badge-mention-user {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
 .webhook-event-badge.badge-mention-none {
   background: rgba(148, 163, 184, 0.1);
   border-color: rgba(148, 163, 184, 0.25);

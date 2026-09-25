@@ -440,9 +440,15 @@ function renderGroupBanner(group) {
           badgesHtml += '<span class="webhook-event-badge badge-mention" title="Mention Discord: @everyone">🔔 @everyone</span>';
         } else if (mType === 'here') {
           badgesHtml += '<span class="webhook-event-badge badge-mention" title="Mention Discord: @here">🔔 @here</span>';
+        } else if (mType === 'user') {
+          const userDisplay = wh.mentionRole ? (wh.mentionRole.startsWith('@') ? wh.mentionRole : `@${wh.mentionRole}`) : '@User';
+          badgesHtml += `<span class="webhook-event-badge badge-mention-user" title="Mention User Discord: ${escapeHtml(wh.mentionRole || '')}">👤 ${escapeHtml(userDisplay)}</span>`;
         } else if (mType === 'role') {
           const roleDisplay = wh.mentionRole ? `@Role (${wh.mentionRole})` : '@Role';
           badgesHtml += `<span class="webhook-event-badge badge-mention" title="Mention Discord Role">🏷️ ${escapeHtml(roleDisplay)}</span>`;
+        } else if (mType === 'custom') {
+          const customDisplay = wh.mentionRole ? wh.mentionRole : 'Custom';
+          badgesHtml += `<span class="webhook-event-badge badge-mention" title="Custom Mention">✍️ ${escapeHtml(customDisplay)}</span>`;
         } else if (mType === 'none') {
           badgesHtml += '<span class="webhook-event-badge badge-mention-none" title="Tanpa Mention (Hening)">🔕 Tanpa Tag</span>';
         }
@@ -1352,7 +1358,11 @@ function renderModalWebhooks() {
     const isDailyReport = events.includes('daily_report');
     const isAccountNotFound = events.includes('account_not_found');
     const mentionType = wh.mention || 'everyone';
-    const isRole = mentionType === 'role';
+    const showInput = ['user', 'role', 'custom'].includes(mentionType);
+
+    let inputPlaceholder = 'Nama User / ID Discord (contoh: @budi atau 123456789)';
+    if (mentionType === 'role') inputPlaceholder = 'ID / Nama Role (contoh: 123456789 atau @Admin)';
+    if (mentionType === 'custom') inputPlaceholder = 'Ketik mention bebas (contoh: @user1 @user2)';
 
     return `
       <div class="wh-compact-card" data-idx="${idx}">
@@ -1386,14 +1396,16 @@ function renderModalWebhooks() {
             <span class="wh-mention-label">📢 Mention:</span>
             <select class="wh-mention-select" onchange="updateModalWebhookMentionType(${idx}, this.value)">
               <option value="everyone" ${mentionType === 'everyone' ? 'selected' : ''}>@everyone (Default)</option>
-              <option value="here" ${mentionType === 'here' ? 'selected' : ''}>@here</option>
-              <option value="role" ${mentionType === 'role' ? 'selected' : ''}>@Role (ID Role Discord)</option>
-              <option value="none" ${mentionType === 'none' ? 'selected' : ''}>Tanpa Mention (Hening)</option>
+              <option value="here" ${mentionType === 'here' ? 'selected' : ''}>@here (Online)</option>
+              <option value="user" ${mentionType === 'user' ? 'selected' : ''}>👤 Mention User (Ketik Nama / ID)</option>
+              <option value="role" ${mentionType === 'role' ? 'selected' : ''}>🏷️ Mention Role (ID / Nama Role)</option>
+              <option value="custom" ${mentionType === 'custom' ? 'selected' : ''}>✍️ Custom Mention (Bebas)</option>
+              <option value="none" ${mentionType === 'none' ? 'selected' : ''}>🔕 Tanpa Mention (Hening)</option>
             </select>
           </div>
-          ${isRole ? `
+          ${showInput ? `
             <div class="wh-mention-role-wrap">
-              <input type="text" class="wh-mention-role-input" placeholder="ID Role (contoh: 123456789012345678)" value="${escapeHtml(wh.mentionRole || '')}" oninput="updateModalWebhookField(${idx}, 'mentionRole', this.value)" title="Masukkan ID Role Discord">
+              <input type="text" class="wh-mention-role-input" placeholder="${inputPlaceholder}" value="${escapeHtml(wh.mentionRole || '')}" oninput="updateModalWebhookField(${idx}, 'mentionRole', this.value)" title="${inputPlaceholder}">
             </div>
           ` : ''}
         </div>
