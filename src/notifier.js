@@ -173,33 +173,43 @@ async function dispatchDiscordPayload(targets, payloadOrBuilder, eventName = 'No
       }
     }
 
-    try {
-      let res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000)
-      });
+    let attempts = 0;
+    const maxAttempts = 3;
 
-      // Handle Discord 429 Rate Limiting with automatic backoff retry
-      if (res.status === 429) {
-        try {
-          const rateData = await res.json().catch(() => ({}));
-          const waitMs = Math.min(5000, Math.ceil((rateData.retry_after || 1.5) * 1000) + 100);
-          console.warn(`[Notifier] Webhook rate-limited (429) pada ${url}. Menunggu ${waitMs}ms lalu mencoba ulang...`);
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (res.ok) {
+          successCount++;
+          break;
+        }
+
+        if (res.status === 429 && attempts < maxAttempts) {
+          let waitMs = 2000;
+          try {
+            const retryHeader = res.headers.get('retry-after');
+            if (retryHeader) {
+              waitMs = Math.ceil(parseFloat(retryHeader) * 1000) + 200;
+            } else {
+              const rateData = await res.json().catch(() => ({}));
+              if (rateData.retry_after) {
+                waitMs = Math.ceil(Number(rateData.retry_after) * 1000) + 200;
+              }
+            }
+          } catch {}
+          waitMs = Math.max(1000, Math.min(waitMs, 10000));
+          console.warn(`[Notifier] Webhook rate-limited (429) pada ${url}. Menunggu ${waitMs}ms lalu mencoba ulang (${attempts}/${maxAttempts})...`);
           await new Promise((r) => setTimeout(r, waitMs));
-          res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
-          });
-        } catch {}
-      }
+          continue;
+        }
 
-      if (res.ok) {
-        successCount++;
-      } else {
         const errText = await res.text();
         console.error(`[Notifier] Webhook failed (${res.status}) on ${url}:`, errText);
         if (res.status === 429) {
@@ -211,10 +221,15 @@ async function dispatchDiscordPayload(targets, payloadOrBuilder, eventName = 'No
         } else {
           lastWebhookError = `Discord menolak webhook (Status ${res.status}): ${errText.slice(0, 100)}`;
         }
+        break;
+      } catch (err) {
+        if (attempts >= maxAttempts) {
+          console.error(`[Notifier] Error dispatching ${eventName} to ${url}:`, err.message);
+          lastWebhookError = `Gagal menghubungi server Discord: ${err.message}`;
+        } else {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
       }
-    } catch (err) {
-      console.error(`[Notifier] Error dispatching ${eventName} to ${url}:`, err.message);
-      lastWebhookError = `Gagal menghubungi server Discord: ${err.message}`;
     }
   }
   return successCount > 0;
