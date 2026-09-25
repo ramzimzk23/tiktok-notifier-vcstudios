@@ -585,66 +585,68 @@
         <button class="modal-close" id="btn-close-group-modal">&times;</button>
       </div>
       <form id="form-group" class="modal-form">
-        <input type="hidden" id="group-modal-id">
-        <div class="form-group">
-          <label for="group-modal-name">Nama Grup</label>
-          <input type="text" id="group-modal-name" class="form-input" required placeholder="Contoh: Gaming Feed / Entertainment">
-          <small class="form-help">Nama grup yang akan muncul sebagai tag di notifikasi Discord.</small>
-        </div>
-
-        <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <label style="margin: 0; font-weight: 700;">Daftar Webhook Discord & Filter Notifikasi</label>
-            <button type="button" class="btn btn-xs btn-outline" id="btn-add-modal-webhook" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan); gap: 4px;">
-              <span>+ Tambah Webhook</span>
-            </button>
+        <div class="modal-body">
+          <input type="hidden" id="group-modal-id">
+          <div class="form-group">
+            <label for="group-modal-name">Nama Grup</label>
+            <input type="text" id="group-modal-name" class="form-input" required placeholder="Contoh: Gaming Feed / Entertainment">
+            <small class="form-help">Nama grup yang akan muncul sebagai tag di notifikasi Discord.</small>
           </div>
-          <small class="form-help" style="margin-bottom: 12px; display: block;">
-            Anda dapat menambahkan lebih dari 1 webhook dan mengatur tipe notifikasi untuk masing-masing webhook (misal: webhook khusus peringatan task / target).
-          </small>
 
-          <div id="modal-webhooks-container" class="modal-webhooks-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
-            <!-- Dynamic Webhook Items Injected by JS -->
-          </div>
-        </div>
-
-        <!-- Task Deadline & Periodic Reminder Settings -->
-        <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <label style="margin: 0; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
-              <span>⏰ Pengaturan Peringatan Berkala & Batas Waktu</span>
-            </label>
-            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.78rem; color: var(--text-secondary);">
-              <input type="checkbox" id="group-modal-reminder-enabled" checked style="accent-color: #f59e0b; cursor: pointer;">
-              <span>Aktifkan Peringatan</span>
-            </label>
-          </div>
-          <small class="form-help" style="margin-bottom: 12px; display: block;">
-            Atur berapa menit sekali peringatan otomatis dikirim ke webhook jika target 14 akun belum selesai, serta 1x peringatan 10 menit sebelum deadline.
-          </small>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
-            <div>
-              <label for="group-modal-warning-interval" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-                Kirim Peringatan Setiap (Menit):
-              </label>
-              <input type="number" id="group-modal-warning-interval" class="form-input" value="60" min="5" max="720" required placeholder="Misal: 60">
-              <small style="font-size: 0.7rem; color: var(--text-muted);">Contoh: 60 = tiap 1 jam, 30 = tiap 30 mnt</small>
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="margin: 0; font-weight: 700;">Daftar Webhook Discord & Filter Notifikasi</label>
+              <button type="button" class="btn btn-xs btn-outline" id="btn-add-modal-webhook" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan); gap: 4px;">
+                <span>+ Tambah Webhook</span>
+              </button>
             </div>
-            <div>
-              <label for="group-modal-deadline" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-                Batas Waktu Selesai (WIB):
-              </label>
-              <input type="time" id="group-modal-deadline" class="form-input" value="22:00" required style="font-family: var(--font-mono);">
-              <small style="font-size: 0.7rem; color: var(--text-muted);">Target 14 akun harus selesai</small>
+            <small class="form-help" style="margin-bottom: 12px; display: block;">
+              Anda dapat menambahkan lebih dari 1 webhook dan mengatur tipe notifikasi untuk masing-masing webhook (misal: webhook khusus peringatan task / target).
+            </small>
+
+            <div id="modal-webhooks-container" class="modal-webhooks-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 4px;">
+              <!-- Dynamic Webhook Items Injected by JS -->
             </div>
           </div>
 
-          <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.78rem; color: #fff;">
-              <input type="checkbox" id="group-modal-reminder-10m" checked style="accent-color: #f59e0b; cursor: pointer;">
-              <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum batas waktu</span>
-            </label>
+          <!-- Task Deadline & Periodic Reminder Settings -->
+          <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="margin: 0; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+                <span>⏰ Pengaturan Peringatan Berkala & Batas Waktu</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.78rem; color: var(--text-secondary);">
+                <input type="checkbox" id="group-modal-reminder-enabled" checked style="accent-color: #f59e0b; cursor: pointer;">
+                <span>Aktifkan Peringatan</span>
+              </label>
+            </div>
+            <small class="form-help" style="margin-bottom: 12px; display: block;">
+              Atur berapa menit sekali peringatan otomatis dikirim ke webhook jika target 14 akun belum selesai, serta 1x peringatan 10 menit sebelum deadline.
+            </small>
+
+            <div class="deadline-inputs-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 10px;">
+              <div>
+                <label for="group-modal-warning-interval" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+                  Kirim Peringatan Setiap (Menit):
+                </label>
+                <input type="number" id="group-modal-warning-interval" class="form-input" value="60" min="5" max="720" required placeholder="Misal: 60">
+                <small style="font-size: 0.7rem; color: var(--text-muted);">Contoh: 60 = tiap 1 jam, 30 = tiap 30 mnt</small>
+              </div>
+              <div>
+                <label for="group-modal-deadline" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+                  Batas Waktu Selesai (WIB):
+                </label>
+                <input type="time" id="group-modal-deadline" class="form-input" value="22:00" required style="font-family: var(--font-mono);">
+                <small style="font-size: 0.7rem; color: var(--text-muted);">Target 14 akun harus selesai</small>
+              </div>
+            </div>
+
+            <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.78rem; color: #fff;">
+                <input type="checkbox" id="group-modal-reminder-10m" checked style="accent-color: #f59e0b; cursor: pointer;">
+                <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum batas waktu</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -664,33 +666,35 @@
         <button class="modal-close" id="btn-close-settings">&times;</button>
       </div>
       <form id="form-settings" class="modal-form">
-        <div class="form-group">
-          <label for="setting-interval">Interval Pengecekan Total (Detik)</label>
-          <input type="number" id="setting-interval" class="form-input" min="30" max="3600" step="10" required>
-          <small class="form-help">Default: 120 detik (2 menit). Seluruh grup akan dicek secara bergantian.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="setting-delay">Jeda Antar Akun / Pacing Delay (Milidetik)</label>
-          <input type="number" id="setting-delay" class="form-input" min="500" max="10000" step="500" required>
-          <small class="form-help">Jeda waktu antar akun + jitter acak agar aman dari blokir IP TikTok (Rekomendasi: 2000ms).</small>
-        </div>
-
-        <hr style="border:none; border-top:1px solid var(--border-subtle); margin: 20px 0;">
-
-        <div class="supabase-status-banner" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #10b981; font-size: 0.92rem;">
-              <span class="status-pulse" style="background: #10b981;"></span>
-              <span>Cloud Database Supabase: PERMANEN TERHUBUNG</span>
-            </div>
-            <span style="font-size: 0.72rem; color: #10b981; background: rgba(16, 185, 129, 0.2); padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">AKTIF 24/7</span>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="setting-interval">Interval Pengecekan Total (Detik)</label>
+            <input type="number" id="setting-interval" class="form-input" min="30" max="3600" step="10" required>
+            <small class="form-help">Default: 120 detik (2 menit). Seluruh grup akan dicek secara bergantian.</small>
           </div>
-          <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.45;">
-            Seluruh data grup saluran, webhook Discord, dan akun TikTok Anda tersimpan 100% permanen di cloud database Supabase. Anda tidak perlu memasukkan URL atau Key lagi.
-          </p>
-          <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 8px 12px; font-size: 0.76rem; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            URL Proyek: <span style="color: var(--tiktok-cyan); font-weight: 600;">https://nooymoegamxwwwdvzffa.supabase.co</span>
+
+          <div class="form-group">
+            <label for="setting-delay">Jeda Antar Akun / Pacing Delay (Milidetik)</label>
+            <input type="number" id="setting-delay" class="form-input" min="500" max="10000" step="500" required>
+            <small class="form-help">Jeda waktu antar akun + jitter acak agar aman dari blokir IP TikTok (Rekomendasi: 2000ms).</small>
+          </div>
+
+          <hr style="border:none; border-top:1px solid var(--border-subtle); margin: 20px 0;">
+
+          <div class="supabase-status-banner" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #10b981; font-size: 0.92rem;">
+                <span class="status-pulse" style="background: #10b981;"></span>
+                <span>Cloud Database Supabase: PERMANEN TERHUBUNG</span>
+              </div>
+              <span style="font-size: 0.72rem; color: #10b981; background: rgba(16, 185, 129, 0.2); padding: 3px 8px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">AKTIF 24/7</span>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0 0 10px 0; line-height: 1.45;">
+              Seluruh data grup saluran, webhook Discord, dan akun TikTok Anda tersimpan 100% permanen di cloud database Supabase. Anda tidak perlu memasukkan URL atau Key lagi.
+            </p>
+            <div style="background: rgba(0,0,0,0.35); border-radius: 6px; padding: 8px 12px; font-size: 0.76rem; color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              URL Proyek: <span style="color: var(--tiktok-cyan); font-weight: 600;">https://nooymoegamxwwwdvzffa.supabase.co</span>
+            </div>
           </div>
         </div>
 
@@ -704,7 +708,7 @@
 
   <!-- Modal: Batch Add Accounts -->
   <div class="modal-overlay" id="modal-batch-add">
-    <div class="modal-card" style="max-width: 520px;">
+    <div class="modal-card" style="max-width: 540px;">
       <div class="modal-header">
         <div class="modal-title-wrap">
           <span class="modal-badge">Batch Input</span>
@@ -712,21 +716,23 @@
         </div>
         <button type="button" class="modal-close" id="btn-close-batch">&times;</button>
       </div>
-      <form id="form-batch-add">
-        <div class="form-group">
-          <label class="form-label" for="batch-target-group">Grup Saluran Tujuan</label>
-          <select id="batch-target-group" class="form-input"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="batch-usernames-text">Daftar Akun TikTok</label>
-          <p class="form-help" style="margin-bottom: 8px;">
-            Tempel daftar akun di sini. Bisa format <code>@username</code>, nama biasa, atau link TikTok. Pisahkan dengan baris baru (Enter), koma, atau spasi. Sistem otomatis membersihkan simbol kutip, baris kosong, dan duplikat.
-          </p>
-          <textarea id="batch-usernames-text" class="form-input" rows="8" placeholder="afifahhgstn&#10;andiriosyahputra&#10;shania.ptr&#10;dipanggilthal&#10;..."></textarea>
-        </div>
-        <div id="batch-parse-summary" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 16px; font-size: 0.85rem;">
-          <span style="color: var(--text-muted);">Terdeteksi otomatis:</span>
-          <strong id="batch-detected-badge" style="color: var(--tiktok-cyan); font-weight: 700;">0 akun valid</strong>
+      <form id="form-batch-add" class="modal-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="batch-target-group">Grup Saluran Tujuan</label>
+            <select id="batch-target-group" class="form-input"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="batch-usernames-text">Daftar Akun TikTok</label>
+            <p class="form-help" style="margin-bottom: 8px;">
+              Tempel daftar akun di sini. Bisa format <code>@username</code>, nama biasa, atau link TikTok. Pisahkan dengan baris baru (Enter), koma, atau spasi. Sistem otomatis membersihkan simbol kutip, baris kosong, dan duplikat.
+            </p>
+            <textarea id="batch-usernames-text" class="form-input" rows="8" placeholder="afifahhgstn&#10;andiriosyahputra&#10;shania.ptr&#10;dipanggilthal&#10;..."></textarea>
+          </div>
+          <div id="batch-parse-summary" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 8px; margin-bottom: 8px; font-size: 0.85rem;">
+            <span style="color: var(--text-muted);">Terdeteksi otomatis:</span>
+            <strong id="batch-detected-badge" style="color: var(--tiktok-cyan); font-weight: 700;">0 akun valid</strong>
+          </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-glass" id="btn-cancel-batch">Batal</button>
@@ -743,7 +749,7 @@
 
   <!-- Modal: Edit Account Username -->
   <div class="modal-overlay" id="modal-edit-account">
-    <div class="modal-card" style="max-width: 440px;">
+    <div class="modal-card" style="max-width: 460px;">
       <div class="modal-header">
         <div class="modal-title-wrap">
           <span class="modal-badge">Koreksi Akun</span>
@@ -751,22 +757,24 @@
         </div>
         <button type="button" class="modal-close" id="btn-close-edit-account">&times;</button>
       </div>
-      <form id="form-edit-account">
-        <input type="hidden" id="edit-account-group-id">
-        <input type="hidden" id="edit-account-old-username">
-        <div class="form-group">
-          <label class="form-label">Username Saat Ini (Salah / Typo)</label>
-          <input type="text" id="edit-account-current-display" class="form-input" disabled style="opacity: 0.7; background: rgba(0,0,0,0.4);">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="edit-account-new-input">Username TikTok Baru (Yang Benar)</label>
-          <div class="input-wrapper">
-            <span class="input-prefix">@</span>
-            <input type="text" id="edit-account-new-input" class="form-input" placeholder="contoh: username_asli" required autocomplete="off">
+      <form id="form-edit-account" class="modal-form">
+        <div class="modal-body">
+          <input type="hidden" id="edit-account-group-id">
+          <input type="hidden" id="edit-account-old-username">
+          <div class="form-group">
+            <label class="form-label">Username Saat Ini (Salah / Typo)</label>
+            <input type="text" id="edit-account-current-display" class="form-input" disabled style="opacity: 0.7; background: rgba(0,0,0,0.4);">
           </div>
-          <small class="form-help">Sistem akan langsung memverifikasi profil dan video akun ini ke TikTok.</small>
+          <div class="form-group">
+            <label class="form-label" for="edit-account-new-input">Username TikTok Baru (Yang Benar)</label>
+            <div class="input-wrapper">
+              <span class="input-prefix">@</span>
+              <input type="text" id="edit-account-new-input" class="form-input" placeholder="contoh: username_asli" required autocomplete="off">
+            </div>
+            <small class="form-help">Sistem akan langsung memverifikasi profil dan video akun ini ke TikTok.</small>
+          </div>
         </div>
-        <div class="modal-actions" style="margin-top: 20px;">
+        <div class="modal-actions">
           <button type="button" class="btn btn-glass" id="btn-cancel-edit-account">Batal</button>
           <button type="submit" class="btn btn-primary" id="btn-submit-edit-account">
             <span>Simpan & Verifikasi</span>
