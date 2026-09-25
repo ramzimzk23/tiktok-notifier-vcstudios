@@ -203,11 +203,14 @@ export async function runPoll(isManual = false) {
   }
 }
 
+// Memory map to track last periodic warning time per group
+const lastPeriodicWarningTimestamps = new Map();
+
 /**
  * Automatically check task deadlines and push reminders:
- * 1. 10 minutes (or configured reminder minutes) before deadline if incomplete
- * 2. At or after deadline if still incomplete
- * Resets daily and guarantees exactly 1 notification per alert type per day (no spamming).
+ * 1. Periodic warning every X minutes (configurable, e.g. every 60m, 30m, etc.) while incomplete
+ * 2. Final 1x alert exactly 10 minutes before deadline
+ * Resets daily and guarantees target 14 complete groups receive zero alerts.
  */
 export async function checkTaskDeadlinesAndReminders(isManual = false) {
   try {
@@ -233,6 +236,7 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       dailyAlertsTracker.incompleteWarnings.clear();
       dailyAlertsTracker.reminders10Min.clear();
       dailyAlertsTracker.deadlineWarnings.clear();
+      lastPeriodicWarningTimestamps.clear();
     }
 
     for (const group of groups) {
@@ -240,59 +244,70 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
       if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
 
+      const report = generateDailyReportData(group, runtimeState.accountCache);
+      // If task is completed (14 accounts finished), do NOT send any warnings
+      if (report.isCompleted || report.uploadedCount >= 14) continue;
+
       const deadlineStr = (group.taskDeadline || '22:00').trim();
       const [dHourStr, dMinStr] = deadlineStr.split(':');
       const dHour = parseInt(dHourStr, 10) || 22;
       const dMin = parseInt(dMinStr, 10) || 0;
       const deadlineTotalMinutes = dHour * 60 + dMin;
-      const reminderBeforeMins = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
-      const reminderStartMinutes = Math.max(0, deadlineTotalMinutes - reminderBeforeMins);
+
+      const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
+      const is10MinEnabled = group.taskReminder10MinEnabled !== false;
+      const reminderStartMinutes = Math.max(0, deadlineTotalMinutes - 10);
 
       const groupKey = `${group.id}:${nowWIB}`;
 
-      // 1. Reminder window (e.g. 10 minutes before deadline up to deadline)
-      if ((currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes) || isManual) {
+      // 1. 10 Menit Sebelum Deadline (HANYA 1x Peringatan per Hari)
+      if (is10MinEnabled && currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes) {
         if (!dailyAlertsTracker.reminders10Min.has(groupKey)) {
-          const report = generateDailyReportData(group, runtimeState.accountCache);
-          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
-            dailyAlertsTracker.reminders10Min.add(groupKey);
-            addLog(`⏰ REMINDER TASK (${reminderBeforeMins} MENIT SEBELUM DEADLINE): Tim "${group.name}" belum tuntas (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
-            await sendDiscordIncompleteWarning(
-              group,
-              group.name,
-              report.uploadedCount,
-              report.target,
-              report.missing,
-              {
-                reminderType: '10_min_reminder',
-                deadlineTime: deadlineStr,
-                reminderMinutes: reminderBeforeMins
-              }
-            );
-          }
+          dailyAlertsTracker.reminders10Min.add(groupKey);
+          lastPeriodicWarningTimestamps.set(group.id, Date.now());
+
+          addLog(`🚨 PERINGATAN TERAKHIR (10 MENIT SEBELUM DEADLINE): Tim "${group.name}" belum tuntas (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
+          await sendDiscordIncompleteWarning(
+            group,
+            group.name,
+            report.uploadedCount,
+            report.target,
+            report.missing,
+            {
+              reminderType: '10_min_reminder',
+              deadlineTime: deadlineStr,
+              reminderMinutes: 10
+            }
+          );
+          continue;
         }
       }
 
-      // 2. Deadline Reached (at or after deadline)
-      if (currentMinutes >= deadlineTotalMinutes) {
-        if (!dailyAlertsTracker.deadlineWarnings.has(groupKey)) {
-          const report = generateDailyReportData(group, runtimeState.accountCache);
-          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
-            dailyAlertsTracker.deadlineWarnings.add(groupKey);
-            addLog(`🚨 BATAS WAKTU SELESAI: Waktu task tim "${group.name}" telah habis (${deadlineStr} WIB). Hasil: ${report.uploadedCount}/14 akun selesai. Peringatan 1x dikirim ke Discord.`, 'warn');
-            await sendDiscordIncompleteWarning(
-              group,
-              group.name,
-              report.uploadedCount,
-              report.target,
-              report.missing,
-              {
-                reminderType: 'deadline_reached',
-                deadlineTime: deadlineStr,
-                reminderMinutes: reminderBeforeMins
-              }
-            );
-          }
+      // 2. Peringatan Berkala Setiap X Menit (Bisa diatur waktunya)
+      if (warningIntervalMins > 0) {
+        const intervalMs = warningIntervalMins * 60 * 1000;
+        const lastSent = lastPeriodicWarningTimestamps.get(group.id) || 0;
+        const timeSinceLast = Date.now() - lastSent;
+
+        // Jangan kirim peringatan interval jika saat ini sedang dalam rentang 10 menit menuju deadline (agar tidak tumpang tindih)
+        const in10MinWindow = is10MinEnabled && currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes;
+
+        if ((timeSinceLast >= intervalMs || isManual) && !in10MinWindow) {
+          lastPeriodicWarningTimestamps.set(group.id, Date.now());
+
+          addLog(`⏰ PERINGATAN BERKALA (${warningIntervalMins} MENIT): Mengirim pengingat task belum tuntas ke grup "${group.name}" (${report.uploadedCount}/14 akun selesai, deadline ${deadlineStr} WIB)`, 'warn');
+          await sendDiscordIncompleteWarning(
+            group,
+            group.name,
+            report.uploadedCount,
+            report.target,
+            report.missing,
+            {
+              reminderType: 'periodic_interval',
+              intervalMinutes: warningIntervalMins,
+              deadlineTime: deadlineStr
+            }
+          );
         }
       }
     }

@@ -257,11 +257,17 @@ export async function sendDiscordIncompleteWarning(
   let content = '';
   let color = 0xffaa00; // Amber
 
-  if (reminderType === '10_min_reminder') {
+  if (reminderType === 'periodic_interval') {
+    const intervalMins = options.intervalMinutes || 60;
+    title = `⏰ Peringatan Berkala Task: Target Belum Selesai (${completedCount}/${targetCount} Akun)`;
+    description = `Peringatan otomatis berkala (setiap **${intervalMins} menit**) untuk tim clippers **${groupName}**.\nSaat ini baru **${completedCount} dari ${targetCount} akun** yang selesai mengunggah (masih kurang **${remainingNeeded} akun** lagi menuju batas waktu **${deadlineTime} WIB**).`;
+    content = `@everyone ⏰ **PERINGATAN TASK BERKALA (Setiap ${intervalMins} Menit):** Grup **${groupName}** baru menyelesaikan ${completedCount}/${targetCount} akun (kurang ${remainingNeeded} akun lagi). Batas waktu: **${deadlineTime} WIB**!`;
+    color = 0xf59e0b; // Amber / Orange
+  } else if (reminderType === '10_min_reminder') {
     title = `⏰ Peringatan Task: ${reminderMinutes} Menit Menuju Batas Waktu (${deadlineTime} WIB)`;
     description = `Perhatian untuk tim clippers **${groupName}**!\nBatas waktu penyelesaian task harian akan berakhir dalam **${reminderMinutes} menit lagi** (pukul **${deadlineTime} WIB**).\n\nSaat ini baru **${completedCount} dari ${targetCount} akun** yang selesai mengunggah (masih kurang **${remainingNeeded} akun** lagi). Segera upload sebelum batas waktu berakhir!`;
-    content = `@everyone ⏰ **REMINDER TASK (${reminderMinutes} MENIT LAGI):** Batas waktu task harian grup **${groupName}** berakhir pada pukul **${deadlineTime} WIB**! Baru **${completedCount}/${targetCount} akun** selesai. Segera upload sebelum waktu habis!`;
-    color = 0xf59e0b; // Amber / Orange
+    content = `@everyone 🚨 **PERINGATAN TERAKHIR (${reminderMinutes} MENIT LAGI SEBELUM DEADLINE):** Batas waktu task harian grup **${groupName}** berakhir pada pukul **${deadlineTime} WIB**! Baru **${completedCount}/${targetCount} akun** selesai. Segera upload sebelum waktu habis!`;
+    color = 0xff3b30; // Bright Red Alert
   } else if (reminderType === 'deadline_reached') {
     title = `🚨 Batas Waktu Task Selesai (${deadlineTime} WIB): Kuota Belum Tercapai!`;
     description = `Batas waktu penyelesaian task harian untuk grup **${groupName}** telah **HABIS** pada pukul **${deadlineTime} WIB**.\nTarget kuota **1 video di ${targetCount} akun** belum tuntas.`;

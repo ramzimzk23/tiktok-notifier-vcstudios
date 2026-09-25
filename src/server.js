@@ -552,6 +552,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
 
         const id = 'group-' + Date.now();
         const taskDeadline = (body.taskDeadline || '22:00').trim();
+        const taskWarningIntervalMinutes = body.taskWarningIntervalMinutes !== undefined ? Number(body.taskWarningIntervalMinutes) : 60;
+        const taskReminder10MinEnabled = body.taskReminder10MinEnabled !== undefined ? Boolean(body.taskReminder10MinEnabled) : true;
         const taskReminderMinutes = body.taskReminderMinutes !== undefined ? Number(body.taskReminderMinutes) : 10;
         const taskReminderEnabled = body.taskReminderEnabled !== undefined ? Boolean(body.taskReminderEnabled) : true;
 
@@ -561,6 +563,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           webhookUrl: webhooks[0]?.url || fallbackUrl || '',
           webhooks,
           taskDeadline,
+          taskWarningIntervalMinutes,
+          taskReminder10MinEnabled,
           taskReminderMinutes,
           taskReminderEnabled,
           accounts: []
@@ -609,11 +613,13 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         if (body.taskDeadline !== undefined) group.taskDeadline = String(body.taskDeadline).trim() || '22:00';
+        if (body.taskWarningIntervalMinutes !== undefined) group.taskWarningIntervalMinutes = Number(body.taskWarningIntervalMinutes);
+        if (body.taskReminder10MinEnabled !== undefined) group.taskReminder10MinEnabled = Boolean(body.taskReminder10MinEnabled);
         if (body.taskReminderMinutes !== undefined) group.taskReminderMinutes = Number(body.taskReminderMinutes);
         if (body.taskReminderEnabled !== undefined) group.taskReminderEnabled = Boolean(body.taskReminderEnabled);
 
         await upsertGroup(group);
-        addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, ${group.webhooks?.length || 0} webhook)`, 'success');
+        addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, interval: ${group.taskWarningIntervalMinutes || 60}m, ${group.webhooks?.length || 0} webhook)`, 'success');
         sendJson({ success: true, group });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);

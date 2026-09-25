@@ -608,40 +608,43 @@
           </div>
         </div>
 
-        <!-- Task Deadline & Reminder Settings -->
+        <!-- Task Deadline & Periodic Reminder Settings -->
         <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <label style="margin: 0; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
-              <span>⏰ Batas Waktu Task & Reminder Harian</span>
+              <span>⏰ Pengaturan Peringatan Berkala & Batas Waktu</span>
             </label>
             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.78rem; color: var(--text-secondary);">
               <input type="checkbox" id="group-modal-reminder-enabled" checked style="accent-color: #f59e0b; cursor: pointer;">
-              <span>Aktifkan Reminder</span>
+              <span>Aktifkan Peringatan</span>
             </label>
           </div>
           <small class="form-help" style="margin-bottom: 12px; display: block;">
-            Peringatan otomatis akan dikirim ke webhook Discord 10 menit sebelum batas waktu jika target 14 akun belum selesai (1x push terhighlight, tidak spamming).
+            Atur berapa menit sekali peringatan otomatis dikirim ke webhook jika target 14 akun belum selesai, serta 1x peringatan 10 menit sebelum deadline.
           </small>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+            <div>
+              <label for="group-modal-warning-interval" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+                Kirim Peringatan Setiap (Menit):
+              </label>
+              <input type="number" id="group-modal-warning-interval" class="form-input" value="60" min="5" max="720" required placeholder="Misal: 60">
+              <small style="font-size: 0.7rem; color: var(--text-muted);">Contoh: 60 = tiap 1 jam, 30 = tiap 30 mnt</small>
+            </div>
             <div>
               <label for="group-modal-deadline" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
                 Batas Waktu Selesai (WIB):
               </label>
               <input type="time" id="group-modal-deadline" class="form-input" value="22:00" required style="font-family: var(--font-mono);">
+              <small style="font-size: 0.7rem; color: var(--text-muted);">Target 14 akun harus selesai</small>
             </div>
-            <div>
-              <label for="group-modal-reminder-mins" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
-                Waktu Peringatan:
-              </label>
-              <select id="group-modal-reminder-mins" class="form-input" style="padding: 9px 10px;">
-                <option value="10" selected>10 Menit Sebelum Selesai</option>
-                <option value="15">15 Menit Sebelum Selesai</option>
-                <option value="30">30 Menit Sebelum Selesai</option>
-                <option value="60">60 Menit (1 Jam) Sebelum</option>
-                <option value="5">5 Menit Sebelum Selesai</option>
-              </select>
-            </div>
+          </div>
+
+          <div style="background: rgba(0, 0, 0, 0.2); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.05);">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.78rem; color: #fff;">
+              <input type="checkbox" id="group-modal-reminder-10m" checked style="accent-color: #f59e0b; cursor: pointer;">
+              <span>Kirim <strong>1x Peringatan Terakhir</strong> tepat 10 menit sebelum batas waktu</span>
+            </label>
           </div>
         </div>
 

@@ -471,7 +471,7 @@ function renderGroupBanner(group) {
       deadlinePill.style.color = 'var(--text-muted)';
       deadlinePill.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     } else {
-      const reminderMins = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
+      const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
       const now = new Date();
       const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Jakarta',
@@ -485,7 +485,7 @@ function renderGroupBanner(group) {
 
       const [dH, dM] = deadlineStr.split(':');
       const dTotalMin = (parseInt(dH, 10) || 22) * 60 + (parseInt(dM, 10) || 0);
-      const reminderStartMin = Math.max(0, dTotalMin - reminderMins);
+      const reminderStartMin = Math.max(0, dTotalMin - 10);
 
       const targetCount = group.accounts?.length > 0 ? Math.min(14, group.accounts.length) : 14;
       const isCompleted = stats.today >= targetCount;
@@ -496,17 +496,17 @@ function renderGroupBanner(group) {
         deadlinePill.style.color = '#34d399';
         deadlinePill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
       } else if (curTotalMin >= reminderStartMin && curTotalMin < dTotalMin) {
-        deadlinePill.textContent = `⏰ Reminder Aktif (${dTotalMin - curTotalMin} Menit Lagi)`;
-        deadlinePill.style.background = 'rgba(245, 158, 11, 0.18)';
-        deadlinePill.style.color = '#fbbf24';
-        deadlinePill.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        deadlinePill.textContent = `🚨 Peringatan Terakhir (${dTotalMin - curTotalMin}m menuju deadline)`;
+        deadlinePill.style.background = 'rgba(239, 68, 68, 0.18)';
+        deadlinePill.style.color = '#f87171';
+        deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
       } else if (curTotalMin >= dTotalMin) {
         deadlinePill.textContent = '🚨 Batas Waktu Terlewati';
         deadlinePill.style.background = 'rgba(239, 68, 68, 0.18)';
         deadlinePill.style.color = '#f87171';
         deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
       } else {
-        deadlinePill.textContent = `⏳ Reminder Aktif (${reminderMins} Menit Sebelum)`;
+        deadlinePill.textContent = `⏳ Notif Tiap ${warningIntervalMins}m & 10m Sebelum Deadline`;
         deadlinePill.style.background = 'rgba(37, 244, 238, 0.12)';
         deadlinePill.style.color = 'var(--tiktok-cyan)';
         deadlinePill.style.borderColor = 'rgba(37, 244, 238, 0.3)';
@@ -1440,8 +1440,9 @@ document.getElementById('btn-create-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Buat Grup Channel Baru';
   document.getElementById('group-modal-id').value = '';
   document.getElementById('group-modal-name').value = '';
+  document.getElementById('group-modal-warning-interval').value = '60';
   document.getElementById('group-modal-deadline').value = '22:00';
-  document.getElementById('group-modal-reminder-mins').value = '10';
+  document.getElementById('group-modal-reminder-10m').checked = true;
   document.getElementById('group-modal-reminder-enabled').checked = true;
   modalWebhooks = [{
     url: '',
@@ -1459,8 +1460,9 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Edit Grup Channel';
   document.getElementById('group-modal-id').value = currentGroup.id;
   document.getElementById('group-modal-name').value = currentGroup.name;
+  document.getElementById('group-modal-warning-interval').value = String(currentGroup.taskWarningIntervalMinutes !== undefined ? currentGroup.taskWarningIntervalMinutes : 60);
   document.getElementById('group-modal-deadline').value = currentGroup.taskDeadline || '22:00';
-  document.getElementById('group-modal-reminder-mins').value = String(currentGroup.taskReminderMinutes !== undefined ? currentGroup.taskReminderMinutes : 10);
+  document.getElementById('group-modal-reminder-10m').checked = currentGroup.taskReminder10MinEnabled !== false;
   document.getElementById('group-modal-reminder-enabled').checked = currentGroup.taskReminderEnabled !== false;
 
   if (Array.isArray(currentGroup.webhooks) && currentGroup.webhooks.length > 0) {
@@ -1512,8 +1514,9 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
   const url = isEdit ? `/api/groups/${id}` : '/api/groups';
   const method = isEdit ? 'PUT' : 'POST';
 
+  const taskWarningIntervalMinutes = Number(document.getElementById('group-modal-warning-interval')?.value || 60);
   const taskDeadline = document.getElementById('group-modal-deadline')?.value || '22:00';
-  const taskReminderMinutes = Number(document.getElementById('group-modal-reminder-mins')?.value || 10);
+  const taskReminder10MinEnabled = document.getElementById('group-modal-reminder-10m')?.checked ?? true;
   const taskReminderEnabled = document.getElementById('group-modal-reminder-enabled')?.checked ?? true;
 
   try {
@@ -1525,7 +1528,8 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
         webhooks: cleanedWebhooks,
         webhookUrl: cleanedWebhooks[0]?.url || '',
         taskDeadline,
-        taskReminderMinutes,
+        taskWarningIntervalMinutes,
+        taskReminder10MinEnabled,
         taskReminderEnabled
       })
     });
