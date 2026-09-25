@@ -16,7 +16,8 @@ import {
   sendDiscordWarningNotification,
   sendDiscordDoubleUploadWarning,
   sendDiscordIncompleteWarning,
-  sendDiscordTaskCompletedNotification
+  sendDiscordTaskCompletedNotification,
+  sendDiscordMorningKickoff
 } from './notifier.js';
 
 const warnedNotFoundAccounts = new Set();
@@ -26,7 +27,8 @@ const dailyAlertsTracker = {
   incompleteWarnings: new Set(),
   reminders10Min: new Set(),
   deadlineWarnings: new Set(),
-  completedAlerts: new Set()
+  completedAlerts: new Set(),
+  morningGreetings: new Set()
 };
 
 let isPolling = false;
@@ -323,6 +325,7 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       dailyAlertsTracker.reminders10Min.clear();
       dailyAlertsTracker.deadlineWarnings.clear();
       dailyAlertsTracker.completedAlerts.clear();
+      dailyAlertsTracker.morningGreetings.clear();
       runtimeState.lastPeriodicWarningTimestamps?.clear();
     }
 
@@ -365,6 +368,28 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
         if (currentMinutes >= deadlineTotalMinutes) {
           // Sudah lewat jam batas deadline (setelah 22:00 WIB)
           continue;
+        }
+      }
+
+      // 1. Kickoff Ucapan "Selamat Mengerjakan" pada Pukul 09:00 WIB (Hanya 1x per Hari)
+      if (!isManual && currentMinutes >= startTotalMinutes && currentMinutes < startTotalMinutes + 120) {
+        if (!dailyAlertsTracker.morningGreetings.has(groupKey)) {
+          const reportUrl = getReportUrl(group.id, 0);
+          addLog(`☀️ Pukul ${group.taskReminderStartTime || '09:00'} WIB: Mengirim ucapan "Selamat Mengerjakan" ke Discord grup "${group.name}"...`, 'info');
+          const sentGreeting = await sendDiscordMorningKickoff(
+            group,
+            group.name,
+            targetCount,
+            {
+              deadlineTime: deadlineStr,
+              reportUrl
+            }
+          );
+          if (sentGreeting) {
+            dailyAlertsTracker.morningGreetings.add(groupKey);
+            runtimeState.lastPeriodicWarningTimestamps?.set(group.id, Date.now());
+            addLog(`✅ Ucapan "Selamat Mengerjakan" (09:00 WIB) berhasil dikirim ke grup "${group.name}"!`, 'success');
+          }
         }
       }
 

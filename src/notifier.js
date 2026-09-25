@@ -577,9 +577,9 @@ export async function sendDiscordTaskCompletedNotification(
     : '';
 
   const content = `@everyone
-🎉✅ **TARGET KUOTA HARIAN SELESAI!** ✅🎉
-Alhamdulillah, task upload TikTok grup **${groupName}** hari ini SUDAH TUNTAS! (**${completedCount}/${targetCount} Akun**)
-Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥${reportLinkSection}`;
+DAILY TARGET: DONE✅
+good job team clippers! 🙌🏻🥳
+it's time to sleep💤${reportLinkSection}`;
 
   const topUploaded = (uploadedAccounts || []).slice(0, 14);
   const uploadedItems = topUploaded.map((u, i) => {
@@ -633,6 +633,81 @@ Terima kasih semuanya! Kerja bagus tim clippers! 🚀🔥${reportLinkSection}`;
   };
 
   return await dispatchDiscordPayload(targets, payload, 'Notifikasi Task Selesai');
+}
+
+/**
+ * Send Morning Kickoff / Greeting at 09:00 WIB ("Selamat Mengerjakan")
+ * @param {string|object} target Webhook URL or Group object
+ * @param {string} groupName Group name
+ * @param {number} targetCount Target count (default: 14)
+ * @param {object} options Options (e.g. deadlineTime, reportUrl)
+ * @returns {Promise<boolean>}
+ */
+export async function sendDiscordMorningKickoff(
+  target,
+  groupName,
+  targetCount = 14,
+  options = {}
+) {
+  let targets = typeof target === 'string'
+    ? [{ url: target.trim(), mention: 'everyone', mentionRole: '' }]
+    : getWebhookTargetsForEvent(target, WEBHOOK_EVENTS.TASK_WARNING);
+
+  if (targets.length === 0) {
+    if (target?.url) targets = [{ url: target.url.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
+    else if (target?.webhookUrl) targets = [{ url: target.webhookUrl.trim(), mention: target.mention || 'everyone', mentionRole: target.mentionRole || '' }];
+  }
+
+  if (targets.length === 0) {
+    lastWebhookError = 'Tidak ada webhook yang aktif untuk menerima ucapan pembuka task';
+    return false;
+  }
+
+  const { deadlineTime = '22:00', reportUrl = '' } = options;
+  const formattedDeadline = (deadlineTime || '22:00').replace(':', '.');
+
+  const reportLinkSection = reportUrl
+    ? `\n\n📋 **Link Laporan Interaktif:**\n${reportUrl}`
+    : '';
+
+  const content = `@everyone
+☀️ **SELAMAT PAGI & SELAMAT MENGERJAKAN!** 🚀✨
+Semangat untuk tim clippers **${groupName}**!
+Task upload TikTok hari ini sudah dimulai. Target kuota: **minimal 14 video** sebelum batas report jam **${formattedDeadline} WIB**👿💥
+Yuk cicil upload-nya dari sekarang, selamat bekerja semuanya! 🔥${reportLinkSection}`;
+
+  const payload = {
+    username: 'VCStudios Bot',
+    avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
+    content,
+    allowed_mentions: {
+      parse: ['everyone', 'roles', 'users']
+    },
+    embeds: [
+      {
+        title: `🌅 Kickoff Pukul 09:00 WIB: ${groupName}`,
+        description: `Waktu pengerjaan dan upload video clippers telah dimulai. Pastikan setiap postingan memiliki link valid dan tidak melakukan double upload.`,
+        color: 0xffb800, // Warm Sunrise Amber
+        fields: [
+          { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
+          { name: '🎯 Target Kuota Hari Ini', value: `**${targetCount} Akun TikTok**`, inline: true },
+          { name: '⏰ Batas Kirim Report', value: `\`${formattedDeadline} WIB\``, inline: true },
+          ...(reportUrl ? [{
+            name: '📋 Link Laporan Lengkap (Web)',
+            value: `[🌐 Buka Status Laporan Real-Time](${reportUrl})\n\`${reportUrl}\``,
+            inline: false
+          }] : [])
+        ],
+        footer: {
+          text: 'VCStudios • Daily Kickoff Reminder',
+          icon_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico'
+        },
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  return await dispatchDiscordPayload(targets, payload, 'Morning Kickoff');
 }
 
 /**
