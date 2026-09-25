@@ -87,9 +87,10 @@ async function readLocalConfig() {
         ...g,
         webhookUrl: primaryUrl,
         webhooks,
-        taskReminderStartTime: g.taskReminderStartTime || '09:00',
+        taskReminderStartTime: g.taskReminderStartTime || '10:00',
         taskDeadline: g.taskDeadline || '22:00',
-        taskWarningIntervalMinutes: g.taskWarningIntervalMinutes !== undefined ? Number(g.taskWarningIntervalMinutes) : 60,
+        taskWarningIntervalEnabled: g.taskWarningIntervalEnabled !== undefined ? Boolean(g.taskWarningIntervalEnabled) : true,
+        taskWarningIntervalMinutes: g.taskWarningIntervalMinutes !== undefined ? Number(g.taskWarningIntervalMinutes) : 30,
         taskReminder10MinEnabled: g.taskReminder10MinEnabled !== undefined ? Boolean(g.taskReminder10MinEnabled) : true,
         taskReminderMinutes: g.taskReminderMinutes !== undefined ? Number(g.taskReminderMinutes) : 10,
         taskReminderEnabled: g.taskReminderEnabled !== undefined ? Boolean(g.taskReminderEnabled) : true
@@ -418,9 +419,10 @@ export async function getFullConfig() {
 
         let webhooks = [];
         let primaryWebhookUrl = '';
-        let taskReminderStartTime = '09:00';
+        let taskReminderStartTime = '10:00';
         let taskDeadline = '22:00';
-        let taskWarningIntervalMinutes = 60;
+        let taskWarningIntervalEnabled = true;
+        let taskWarningIntervalMinutes = 30;
         let taskReminder10MinEnabled = true;
         let taskReminderMinutes = 10;
         let taskReminderEnabled = true;
@@ -448,6 +450,7 @@ export async function getFullConfig() {
                 }));
                 if (parsed.taskReminderStartTime) taskReminderStartTime = parsed.taskReminderStartTime;
                 if (parsed.taskDeadline) taskDeadline = parsed.taskDeadline;
+                if (parsed.taskWarningIntervalEnabled !== undefined) taskWarningIntervalEnabled = Boolean(parsed.taskWarningIntervalEnabled);
                 if (parsed.taskWarningIntervalMinutes !== undefined) taskWarningIntervalMinutes = Number(parsed.taskWarningIntervalMinutes);
                 if (parsed.taskReminder10MinEnabled !== undefined) taskReminder10MinEnabled = Boolean(parsed.taskReminder10MinEnabled);
                 if (parsed.taskReminderMinutes !== undefined) taskReminderMinutes = Number(parsed.taskReminderMinutes);
@@ -469,8 +472,9 @@ export async function getFullConfig() {
           name: g.name,
           webhookUrl: primaryWebhookUrl,
           webhooks,
-          taskReminderStartTime: taskReminderStartTime || '09:00',
+          taskReminderStartTime: taskReminderStartTime || '10:00',
           taskDeadline,
+          taskWarningIntervalEnabled,
           taskWarningIntervalMinutes,
           taskReminder10MinEnabled,
           taskReminderMinutes,
@@ -533,9 +537,10 @@ export async function upsertGroup(group) {
     ? group.webhooks
     : (group.webhookUrl ? [{ url: group.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS }] : []);
 
-  const taskReminderStartTime = group.taskReminderStartTime || '09:00';
+  const taskReminderStartTime = group.taskReminderStartTime || '10:00';
   const taskDeadline = group.taskDeadline || '22:00';
-  const taskWarningIntervalMinutes = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
+  const taskWarningIntervalEnabled = group.taskWarningIntervalEnabled !== undefined ? Boolean(group.taskWarningIntervalEnabled) : true;
+  const taskWarningIntervalMinutes = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 30;
   const taskReminder10MinEnabled = group.taskReminder10MinEnabled !== undefined ? Boolean(group.taskReminder10MinEnabled) : true;
   const taskReminderMinutes = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
   const taskReminderEnabled = group.taskReminderEnabled !== undefined ? Boolean(group.taskReminderEnabled) : true;
@@ -544,6 +549,7 @@ export async function upsertGroup(group) {
     webhooks: webhooksToSave,
     taskReminderStartTime,
     taskDeadline,
+    taskWarningIntervalEnabled,
     taskWarningIntervalMinutes,
     taskReminder10MinEnabled,
     taskReminderMinutes,
@@ -573,6 +579,7 @@ export async function upsertGroup(group) {
     webhooks: webhooksToSave,
     taskReminderStartTime,
     taskDeadline,
+    taskWarningIntervalEnabled,
     taskWarningIntervalMinutes,
     taskReminder10MinEnabled,
     taskReminderMinutes,

@@ -508,9 +508,10 @@ function renderGroupBanner(group) {
       deadlinePill.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     } else {
       const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 30;
-      const startTimeStr = group.taskReminderStartTime || '09:00';
+      const isIntervalOn = group.taskWarningIntervalEnabled !== false;
+      const startTimeStr = group.taskReminderStartTime || '10:00';
       const [sH, sM] = startTimeStr.split(':');
-      const sTotalMin = (parseInt(sH, 10) || 9) * 60 + (parseInt(sM, 10) || 0);
+      const sTotalMin = (parseInt(sH, 10) || 10) * 60 + (parseInt(sM, 10) || 0);
 
       const now = new Date();
       const parts = new Intl.DateTimeFormat('en-US', {
@@ -551,7 +552,11 @@ function renderGroupBanner(group) {
         deadlinePill.style.color = '#f87171';
         deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
       } else {
-        deadlinePill.textContent = `⏰ Reminder Aktif (${startTimeStr} - ${deadlineStr} WIB, Tiap ${warningIntervalMins}m)`;
+        if (isIntervalOn) {
+          deadlinePill.textContent = `⏰ Reminder Aktif (${startTimeStr} - ${deadlineStr} WIB, Tiap ${warningIntervalMins}m)`;
+        } else {
+          deadlinePill.textContent = `⏰ Reminder Aktif (${startTimeStr} & 12:00 WIB, Berkala Nonaktif)`;
+        }
         deadlinePill.style.background = 'rgba(37, 244, 238, 0.12)';
         deadlinePill.style.color = 'var(--tiktok-cyan)';
         deadlinePill.style.borderColor = 'rgba(37, 244, 238, 0.3)';
@@ -1550,9 +1555,15 @@ document.getElementById('btn-create-group').addEventListener('click', () => {
   document.getElementById('group-modal-id').value = '';
   document.getElementById('group-modal-name').value = '';
   const remStartEl = document.getElementById('group-modal-reminder-start');
-  if (remStartEl) remStartEl.value = '09:00';
+  if (remStartEl) remStartEl.value = '10:00';
   document.getElementById('group-modal-deadline').value = '22:00';
   document.getElementById('group-modal-warning-interval').value = '30';
+  const intervalChk = document.getElementById('group-modal-interval-enabled');
+  if (intervalChk) {
+    intervalChk.checked = true;
+    const intervalTxt = document.getElementById('group-modal-interval-status');
+    if (intervalTxt) intervalTxt.textContent = 'Aktif';
+  }
   document.getElementById('group-modal-reminder-10m').checked = true;
   document.getElementById('group-modal-reminder-enabled').checked = true;
   modalWebhooks = [{
@@ -1574,9 +1585,15 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-id').value = currentGroup.id;
   document.getElementById('group-modal-name').value = currentGroup.name;
   const remStartEl = document.getElementById('group-modal-reminder-start');
-  if (remStartEl) remStartEl.value = currentGroup.taskReminderStartTime || '09:00';
+  if (remStartEl) remStartEl.value = currentGroup.taskReminderStartTime || '10:00';
   document.getElementById('group-modal-deadline').value = currentGroup.taskDeadline || '22:00';
   document.getElementById('group-modal-warning-interval').value = String(currentGroup.taskWarningIntervalMinutes !== undefined ? currentGroup.taskWarningIntervalMinutes : 30);
+  const intervalChk = document.getElementById('group-modal-interval-enabled');
+  if (intervalChk) {
+    intervalChk.checked = currentGroup.taskWarningIntervalEnabled !== false;
+    const intervalTxt = document.getElementById('group-modal-interval-status');
+    if (intervalTxt) intervalTxt.textContent = intervalChk.checked ? 'Aktif' : 'Nonaktif';
+  }
   document.getElementById('group-modal-reminder-10m').checked = currentGroup.taskReminder10MinEnabled !== false;
   document.getElementById('group-modal-reminder-enabled').checked = currentGroup.taskReminderEnabled !== false;
 
@@ -1608,6 +1625,15 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   renderModalWebhooks();
   groupModal.classList.add('active');
 });
+
+// Listener toggle status text modal
+const intervalToggleInput = document.getElementById('group-modal-interval-enabled');
+if (intervalToggleInput) {
+  intervalToggleInput.addEventListener('change', () => {
+    const statusTxt = document.getElementById('group-modal-interval-status');
+    if (statusTxt) statusTxt.textContent = intervalToggleInput.checked ? 'Aktif' : 'Nonaktif';
+  });
+}
 
 document.getElementById('btn-close-group-modal').addEventListener('click', () => {
   groupModal.classList.remove('active');
@@ -1641,9 +1667,10 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
   const url = isEdit ? `/api/groups/${id}` : '/api/groups';
   const method = isEdit ? 'PUT' : 'POST';
 
-  const taskReminderStartTime = document.getElementById('group-modal-reminder-start')?.value || '09:00';
+  const taskReminderStartTime = document.getElementById('group-modal-reminder-start')?.value || '10:00';
   const taskDeadline = document.getElementById('group-modal-deadline')?.value || '22:00';
   const taskWarningIntervalMinutes = Number(document.getElementById('group-modal-warning-interval')?.value || 30);
+  const taskWarningIntervalEnabled = document.getElementById('group-modal-interval-enabled')?.checked ?? true;
   const taskReminder10MinEnabled = document.getElementById('group-modal-reminder-10m')?.checked ?? true;
   const taskReminderEnabled = document.getElementById('group-modal-reminder-enabled')?.checked ?? true;
 
@@ -1658,6 +1685,7 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
         taskReminderStartTime,
         taskDeadline,
         taskWarningIntervalMinutes,
+        taskWarningIntervalEnabled,
         taskReminder10MinEnabled,
         taskReminderEnabled
       })

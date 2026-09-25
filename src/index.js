@@ -17,7 +17,8 @@ import {
   sendDiscordDoubleUploadWarning,
   sendDiscordIncompleteWarning,
   sendDiscordTaskCompletedNotification,
-  sendDiscordMorningKickoff
+  sendDiscordMorningKickoff,
+  sendDiscordNoonCheckIn
 } from './notifier.js';
 
 const warnedNotFoundAccounts = new Set();
@@ -28,7 +29,8 @@ const dailyAlertsTracker = {
   reminders10Min: new Set(),
   deadlineWarnings: new Set(),
   completedAlerts: new Set(),
-  morningGreetings: new Set()
+  morningGreetings: new Set(),
+  noonCheckIns: new Set()
 };
 
 let isPolling = false;
@@ -326,6 +328,7 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       dailyAlertsTracker.deadlineWarnings.clear();
       dailyAlertsTracker.completedAlerts.clear();
       dailyAlertsTracker.morningGreetings.clear();
+      dailyAlertsTracker.noonCheckIns.clear();
       runtimeState.lastPeriodicWarningTimestamps?.clear();
     }
 
@@ -349,8 +352,8 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
         continue;
       }
 
-      const [sHourStr, sMinStr] = (group.taskReminderStartTime || '09:00').split(':');
-      const sHour = parseInt(sHourStr, 10) || 9;
+      const [sHourStr, sMinStr] = (group.taskReminderStartTime || '10:00').split(':');
+      const sHour = parseInt(sHourStr, 10) || 10;
       const sMin = parseInt(sMinStr, 10) || 0;
       const startTotalMinutes = sHour * 60 + sMin;
 
@@ -359,10 +362,10 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
       const dMin = parseInt(dMinStr, 10) || 0;
       const deadlineTotalMinutes = dHour * 60 + dMin;
 
-      // Jendela Waktu Reminder: Hanya berjalan mulai jam 09:00 WIB sampai 22:00 WIB (atau batas deadline)
+      // Jendela Waktu Reminder: Hanya berjalan mulai jam 10:00 WIB sampai 22:00 WIB (atau batas deadline)
       if (!isManual) {
         if (currentMinutes < startTotalMinutes) {
-          // Belum masuk jam reminder (sebelum 09:00 WIB)
+          // Belum masuk jam reminder (sebelum 10:00 WIB)
           continue;
         }
         if (currentMinutes >= deadlineTotalMinutes) {
@@ -371,11 +374,11 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
         }
       }
 
-      // 1. Kickoff Ucapan "Selamat Mengerjakan" pada Pukul 09:00 WIB (Hanya 1x per Hari)
+      // 1. Kickoff Ucapan "Selamat Mengerjakan" pada Pukul 10:00 WIB (Hanya 1x per Hari)
       if (!isManual && currentMinutes >= startTotalMinutes && currentMinutes < startTotalMinutes + 120) {
         if (!dailyAlertsTracker.morningGreetings.has(groupKey)) {
           const reportUrl = getReportUrl(group.id, 0);
-          addLog(`☀️ Pukul ${group.taskReminderStartTime || '09:00'} WIB: Mengirim ucapan "Selamat Mengerjakan" ke Discord grup "${group.name}"...`, 'info');
+          addLog(`☀️ Pukul ${group.taskReminderStartTime || '10:00'} WIB: Mengirim ucapan "Selamat Mengerjakan" ke Discord grup "${group.name}"...`, 'info');
           const sentGreeting = await sendDiscordMorningKickoff(
             group,
             group.name,
@@ -388,16 +391,42 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
           if (sentGreeting) {
             dailyAlertsTracker.morningGreetings.add(groupKey);
             runtimeState.lastPeriodicWarningTimestamps?.set(group.id, Date.now());
-            addLog(`✅ Ucapan "Selamat Mengerjakan" (09:00 WIB) berhasil dikirim ke grup "${group.name}"!`, 'success');
+            addLog(`✅ Ucapan "Selamat Mengerjakan" (10:00 WIB) berhasil dikirim ke grup "${group.name}"!`, 'success');
+          }
+        }
+      }
+
+      // 2. Pengingat Siang pada Pukul 12:00 WIB: "Hai udah berapa videonyaaaaa. Udah upload belum hari ini" (Hanya 1x per Hari)
+      const noonTotalMinutes = 12 * 60; // 720 menit (12:00 WIB)
+      if (!isManual && currentMinutes >= noonTotalMinutes && currentMinutes < noonTotalMinutes + 120) {
+        if (!dailyAlertsTracker.noonCheckIns.has(groupKey)) {
+          const reportUrl = getReportUrl(group.id, 0);
+          addLog(`☀️ Pukul 12:00 WIB: Mengirim pengingat siang ke Discord grup "${group.name}"...`, 'info');
+          const sentNoon = await sendDiscordNoonCheckIn(
+            group,
+            group.name,
+            report.uploadedCount,
+            targetCount,
+            report.missing,
+            {
+              deadlineTime: deadlineStr,
+              reportUrl
+            }
+          );
+          if (sentNoon) {
+            dailyAlertsTracker.noonCheckIns.add(groupKey);
+            runtimeState.lastPeriodicWarningTimestamps?.set(group.id, Date.now());
+            addLog(`✅ Pengingat siang (12:00 WIB) berhasil dikirim ke grup "${group.name}"!`, 'success');
           }
         }
       }
 
       const warningIntervalMins = group.taskWarningIntervalMinutes !== undefined ? Number(group.taskWarningIntervalMinutes) : 60;
+      const isIntervalEnabled = group.taskWarningIntervalEnabled !== false;
       const is10MinEnabled = group.taskReminder10MinEnabled !== false;
       const reminderStartMinutes = Math.max(startTotalMinutes, deadlineTotalMinutes - 10);
 
-      // 1. 10 Menit Sebelum Deadline (HANYA 1x Peringatan per Hari)
+      // 3. 10 Menit Sebelum Deadline (HANYA 1x Peringatan per Hari)
       if (is10MinEnabled && currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes) {
         if (!dailyAlertsTracker.reminders10Min.has(groupKey)) {
           addLog(`🚨 PERINGATAN TERAKHIR (10 MENIT SEBELUM DEADLINE): Tim "${group.name}" belum tuntas (${report.uploadedCount}/${targetCount} akun). Mengirim ke Discord...`, 'warn');
@@ -422,8 +451,8 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
         }
       }
 
-      // 2. Peringatan Berkala Setiap X Menit (Hanya aktif 09:00 s/d 22:00 WIB)
-      if (warningIntervalMins > 0) {
+      // 4. Peringatan Berkala Setiap X Menit (Bisa diaktifkan/dinonaktifkan per grup, hanya aktif 10:00 s/d 22:00 WIB)
+      if (isIntervalEnabled && warningIntervalMins > 0) {
         // Jangan kirim pengingat berkala jika batas waktu harian sudah lewat
         if (currentMinutes >= deadlineTotalMinutes && !isManual) continue;
 

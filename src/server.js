@@ -631,9 +631,10 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         const id = 'group-' + Date.now();
-        const taskReminderStartTime = (body.taskReminderStartTime || '09:00').trim();
+        const taskReminderStartTime = (body.taskReminderStartTime || '10:00').trim();
         const taskDeadline = (body.taskDeadline || '22:00').trim();
-        const taskWarningIntervalMinutes = body.taskWarningIntervalMinutes !== undefined ? Number(body.taskWarningIntervalMinutes) : 60;
+        const taskWarningIntervalMinutes = body.taskWarningIntervalMinutes !== undefined ? Number(body.taskWarningIntervalMinutes) : 30;
+        const taskWarningIntervalEnabled = body.taskWarningIntervalEnabled !== undefined ? Boolean(body.taskWarningIntervalEnabled) : true;
         const taskReminder10MinEnabled = body.taskReminder10MinEnabled !== undefined ? Boolean(body.taskReminder10MinEnabled) : true;
         const taskReminderMinutes = body.taskReminderMinutes !== undefined ? Number(body.taskReminderMinutes) : 10;
         const taskReminderEnabled = body.taskReminderEnabled !== undefined ? Boolean(body.taskReminderEnabled) : true;
@@ -646,6 +647,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           taskReminderStartTime,
           taskDeadline,
           taskWarningIntervalMinutes,
+          taskWarningIntervalEnabled,
           taskReminder10MinEnabled,
           taskReminderMinutes,
           taskReminderEnabled,
@@ -702,16 +704,17 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           }
         }
 
-        if (body.taskReminderStartTime !== undefined) group.taskReminderStartTime = String(body.taskReminderStartTime).trim() || '09:00';
+        if (body.taskReminderStartTime !== undefined) group.taskReminderStartTime = String(body.taskReminderStartTime).trim() || '10:00';
         if (body.taskDeadline !== undefined) group.taskDeadline = String(body.taskDeadline).trim() || '22:00';
         if (body.taskWarningIntervalMinutes !== undefined) group.taskWarningIntervalMinutes = Number(body.taskWarningIntervalMinutes);
+        if (body.taskWarningIntervalEnabled !== undefined) group.taskWarningIntervalEnabled = Boolean(body.taskWarningIntervalEnabled);
         if (body.taskReminder10MinEnabled !== undefined) group.taskReminder10MinEnabled = Boolean(body.taskReminder10MinEnabled);
         if (body.taskReminderMinutes !== undefined) group.taskReminderMinutes = Number(body.taskReminderMinutes);
         if (body.taskReminderEnabled !== undefined) group.taskReminderEnabled = Boolean(body.taskReminderEnabled);
 
         await upsertGroup(group);
         runtimeState.lastPeriodicWarningTimestamps?.delete(group.id);
-        addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, interval: ${group.taskWarningIntervalMinutes || 60}m, ${group.webhooks?.length || 0} webhook)`, 'success');
+        addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, interval: ${group.taskWarningIntervalMinutes || 30}m [${group.taskWarningIntervalEnabled !== false ? 'aktif' : 'nonaktif'}], ${group.webhooks?.length || 0} webhook)`, 'success');
         sendJson({ success: true, group });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
