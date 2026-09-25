@@ -1950,5 +1950,210 @@ body {
   box-shadow: 0 2px 10px rgba(37, 244, 238, 0.2);
 }
 
+/* Multi-Webhook Configuration Modal & Banner Styles */
+#group-modal .modal-card {
+  max-width: 660px;
+}
+
+.webhook-config-card {
+  background: rgba(18, 24, 38, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.webhook-config-card:hover {
+  border-color: rgba(37, 244, 238, 0.3);
+}
+
+.webhook-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.webhook-card-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--tiktok-cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webhook-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webhook-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.webhook-name-input {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+}
+
+.webhook-url-input {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  padding: 8px 10px;
+}
+
+.webhook-preset-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.webhook-preset-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.webhook-preset-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.webhook-preset-btn:hover {
+  background: rgba(37, 244, 238, 0.12);
+  color: var(--tiktok-cyan);
+  border-color: rgba(37, 244, 238, 0.3);
+}
+
+.webhook-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.webhook-event-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.webhook-event-checkbox-label input[type="checkbox"] {
+  accent-color: var(--tiktok-cyan);
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+.webhook-event-checkbox-label:hover {
+  color: #fff;
+}
+
+/* Group Banner Webhook Items */
+.banner-webhook-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 6px 10px;
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.banner-webhook-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.banner-webhook-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.banner-webhook-url {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--tiktok-cyan);
+}
+
+.banner-webhook-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.webhook-event-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+}
+
+.webhook-event-badge.badge-task {
+  background: rgba(255, 170, 0, 0.12);
+  border-color: rgba(255, 170, 0, 0.3);
+  color: #ffaa00;
+}
+
+.webhook-event-badge.badge-video {
+  background: rgba(37, 244, 238, 0.12);
+  border-color: rgba(37, 244, 238, 0.3);
+  color: var(--tiktok-cyan);
+}
+
+.webhook-event-badge.badge-double {
+  background: rgba(254, 44, 85, 0.12);
+  border-color: rgba(254, 44, 85, 0.3);
+  color: var(--tiktok-pink);
+}
+
+.webhook-event-badge.badge-report {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.3);
+  color: #c084fc;
+}
+
+.webhook-event-badge.badge-account {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.webhook-event-badge.badge-all {
+  background: rgba(37, 244, 238, 0.15);
+  border-color: rgba(37, 244, 238, 0.4);
+  color: #fff;
+}
+
 
 

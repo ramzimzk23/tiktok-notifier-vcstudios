@@ -56,6 +56,7 @@ export async function runPoll(isManual = false) {
         queue.push({
           account,
           webhookUrl,
+          group,
           groupName,
           groupId: group.id
         });
@@ -94,7 +95,7 @@ export async function runPoll(isManual = false) {
 
       const batchPromises = batch.map(async (item) => {
         try {
-          const result = await checkAccount(item.account, item.webhookUrl, item.groupName, false);
+          const result = await checkAccount(item.account, item.group || item.webhookUrl, item.groupName, false);
 
           if (result && result.success && result.user) {
             const cacheItem = {
@@ -125,15 +126,13 @@ export async function runPoll(isManual = false) {
               if (!dailyAlertsTracker.doubleUploads.has(doubleKey)) {
                 dailyAlertsTracker.doubleUploads.add(doubleKey);
                 addLog(`⚠️ PERINGATAN: Akun @${item.account} (${item.groupName}) melakukan DOUBLE UPLOAD (${todayVideos.length} video hari ini)!`, 'warn');
-                if (item.webhookUrl) {
-                  await sendDiscordDoubleUploadWarning(
-                    item.webhookUrl,
-                    item.groupName,
-                    item.account,
-                    todayVideos.length,
-                    todayVideos[0]
-                  );
-                }
+                await sendDiscordDoubleUploadWarning(
+                  item.group || item.webhookUrl,
+                  item.groupName,
+                  item.account,
+                  todayVideos.length,
+                  todayVideos[0]
+                );
               }
             }
           } else if (result && result.isNotFound) {
@@ -152,9 +151,9 @@ export async function runPoll(isManual = false) {
             addLog(`⚠️ PERINGATAN: Akun TikTok @${item.account} (${item.groupName}) TIDAK DITEMUKAN. Periksa kembali username!`, 'error');
 
             const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
-            if (item.webhookUrl && !warnedNotFoundAccounts.has(accKey)) {
+            if (!warnedNotFoundAccounts.has(accKey)) {
               warnedNotFoundAccounts.add(accKey);
-              await sendDiscordWarningNotification(item.webhookUrl, item.account, item.groupName);
+              await sendDiscordWarningNotification(item.group || item.webhookUrl, item.account, item.groupName);
             }
           }
           return { success: true, account: item.account };
@@ -188,7 +187,8 @@ export async function runPoll(isManual = false) {
     );
     if (currentHourWIB >= 18 || isManual) {
       for (const group of groups) {
-        if (!group.webhookUrl || !group.accounts || group.accounts.length === 0) continue;
+        const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
+        if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
         const incompleteKey = `${group.id}:${nowWIB}`;
         if (!dailyAlertsTracker.incompleteWarnings.has(incompleteKey)) {
           const report = generateDailyReportData(group, runtimeState.accountCache);
@@ -196,7 +196,7 @@ export async function runPoll(isManual = false) {
             dailyAlertsTracker.incompleteWarnings.add(incompleteKey);
             addLog(`⚠️ PERINGATAN TARGET: Grup ${group.name} belum selesai (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
             await sendDiscordIncompleteWarning(
-              group.webhookUrl,
+              group,
               group.name,
               report.uploadedCount,
               report.target,

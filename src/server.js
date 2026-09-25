@@ -7,7 +7,8 @@ import {
   sendDiscordNotification,
   sendDiscordDoubleUploadWarning,
   sendDiscordIncompleteWarning,
-  sendDiscordDailyReport
+  sendDiscordDailyReport,
+  sendDiscordTestPing
 } from './notifier.js';
 import {
   getFullConfig,
@@ -484,32 +485,36 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           group = config.groups[0];
         }
 
-        if (!group || !group.webhookUrl) {
+        const testUrl = body.webhookUrl || group?.webhooks?.[0]?.url || group?.webhookUrl;
+
+        if (!testUrl) {
           sendJson({ success: false, error: 'Grup atau Webhook URL belum diisi' }, 400);
           return;
         }
 
-        const username = body.username || group.accounts[0];
-        if (!username) {
-          sendJson({ success: false, error: 'Tambahkan minimal 1 akun ke grup ini untuk melakukan tes webhook' }, 400);
-          return;
-        }
-        addLog(`Menjalankan tes webhook grup "${group.name}" untuk @${username}...`, 'info');
+        const username = body.username || group?.accounts?.[0];
+        let sent = false;
 
-        const result = await getTikTokUserVideos(username);
-        if (!result.success || !result.videos || result.videos.length === 0) {
-          addLog(`Gagal mengambil data @${username} untuk tes webhook: ${result.error}`, 'error');
-          sendJson({ success: false, error: result.error || 'Video tidak ditemukan' }, 400);
-          return;
+        if (username) {
+          addLog(`Menjalankan tes webhook grup "${group?.name || 'Test'}" untuk @${username}...`, 'info');
+          const result = await getTikTokUserVideos(username);
+          if (result.success && result.videos && result.videos.length > 0) {
+            sent = await sendDiscordNotification(testUrl, result.user, result.videos[0], group?.name || 'Tes Webhook');
+          }
         }
 
-        const sent = await sendDiscordNotification(group.webhookUrl, result.user, result.videos[0], group.name);
+        // If no username or video fetch failed, send direct test ping embed
+        if (!sent) {
+          addLog(`Mengirim pesan tes koneksi langsung ke webhook "${group?.name || 'Discord'}"...`, 'info');
+          sent = await sendDiscordTestPing(testUrl, group?.name || 'Tes Webhook');
+        }
+
         if (sent) {
-          addLog(`✅ Notifikasi tes untuk @${username} berhasil dikirim ke grup "${group.name}"!`, 'success');
-          sendJson({ success: true, message: `Notifikasi berhasil dikirim ke grup ${group.name}` });
+          addLog(`✅ Notifikasi tes berhasil dikirim ke webhook "${group?.name || 'Discord'}"!`, 'success');
+          sendJson({ success: true, message: `Notifikasi berhasil dikirim ke webhook ${group?.name || 'Discord'}` });
         } else {
-          addLog(`❌ Gagal mengirim webhook Discord untuk grup "${group.name}"`, 'error');
-          sendJson({ success: false, message: 'Gagal mengirim ke Discord' }, 500);
+          addLog(`❌ Gagal mengirim webhook Discord untuk grup "${group?.name || 'Discord'}"`, 'error');
+          sendJson({ success: false, message: 'Gagal mengirim ke Discord. Periksa URL webhook Anda.' }, 500);
         }
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
@@ -522,7 +527,23 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       try {
         const body = await parseBody();
         const name = (body.name || '').trim();
-        const webhookUrl = (body.webhookUrl || '').trim();
+        const rawWebhooks = Array.isArray(body.webhooks) ? body.webhooks : [];
+        const webhooks = rawWebhooks
+          .filter((w) => w && w.url && typeof w.url === 'string' && w.url.trim().startsWith('http'))
+          .map((w) => ({
+            url: w.url.trim(),
+            name: (w.name || '').trim(),
+            events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
+          }));
+
+        const fallbackUrl = (body.webhookUrl || '').trim();
+        if (webhooks.length === 0 && fallbackUrl) {
+          webhooks.push({
+            url: fallbackUrl,
+            name: 'Default',
+            events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
+          });
+        }
 
         if (!name) {
           sendJson({ success: false, error: 'Nama grup tidak boleh kosong' }, 400);
@@ -533,12 +554,13 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         const newGroup = {
           id,
           name,
-          webhookUrl,
+          webhookUrl: webhooks[0]?.url || fallbackUrl || '',
+          webhooks,
           accounts: []
         };
 
         await upsertGroup(newGroup);
-        addLog(`Grup baru "${name}" berhasil dibuat (${isUsingSupabase() ? 'Supabase' : 'Lokal'})`, 'success');
+        addLog(`Grup baru "${name}" berhasil dibuat (${webhooks.length} webhook terkonfigurasi)`, 'success');
         sendJson({ success: true, group: newGroup });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
@@ -560,10 +582,27 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         if (body.name) group.name = body.name.trim();
-        if (body.webhookUrl !== undefined) group.webhookUrl = body.webhookUrl.trim();
+
+        if (Array.isArray(body.webhooks)) {
+          group.webhooks = body.webhooks
+            .filter((w) => w && w.url && typeof w.url === 'string' && w.url.trim().startsWith('http'))
+            .map((w) => ({
+              url: w.url.trim(),
+              name: (w.name || '').trim(),
+              events: Array.isArray(w.events) && w.events.length > 0 ? w.events : ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found']
+            }));
+          group.webhookUrl = group.webhooks[0]?.url || '';
+        } else if (body.webhookUrl !== undefined) {
+          group.webhookUrl = body.webhookUrl.trim();
+          if (group.webhookUrl) {
+            group.webhooks = [{ url: group.webhookUrl, name: 'Default', events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'] }];
+          } else {
+            group.webhooks = [];
+          }
+        }
 
         await upsertGroup(group);
-        addLog(`Grup "${group.name}" berhasil diperbarui`, 'success');
+        addLog(`Grup "${group.name}" berhasil diperbarui (${group.webhooks?.length || 0} webhook terkonfigurasi)`, 'success');
         sendJson({ success: true, group });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
@@ -812,7 +851,8 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        if (!group.webhookUrl) {
+        const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
+        if (!hasWebhooks) {
           sendJson({ success: false, error: 'Discord webhook belum dikonfigurasi untuk grup ini' }, 400);
           return;
         }
@@ -822,9 +862,9 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         if (isNaN(offsetDays)) offsetDays = 0;
 
         const report = generateDailyReportData(group, runtimeState.accountCache, offsetDays);
-        const sent = await sendDiscordDailyReport(group.webhookUrl, group.name, report);
+        const sent = await sendDiscordDailyReport(group, group.name, report);
         if (!sent) {
-          sendJson({ success: false, error: 'Gagal mengirim Daily Report ke Discord Webhook' }, 502);
+          sendJson({ success: false, error: 'Gagal mengirim Daily Report ke Discord Webhook (periksa filter webhook)' }, 502);
           return;
         }
 
@@ -848,14 +888,15 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           return;
         }
 
-        if (!group.webhookUrl) {
+        const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
+        if (!hasWebhooks) {
           sendJson({ success: false, error: 'Discord webhook belum dikonfigurasi untuk grup ini' }, 400);
           return;
         }
 
         const report = generateDailyReportData(group, runtimeState.accountCache);
         const sent = await sendDiscordIncompleteWarning(
-          group.webhookUrl,
+          group,
           group.name,
           report.uploadedCount,
           report.target,
@@ -863,7 +904,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         );
 
         if (!sent) {
-          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook' }, 502);
+          sendJson({ success: false, error: 'Gagal mengirim peringatan ke Discord Webhook (periksa filter webhook)' }, 502);
           return;
         }
 

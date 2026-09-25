@@ -385,11 +385,57 @@ function renderGroupBanner(group) {
   document.getElementById('banner-group-name').textContent = group.name;
   document.getElementById('banner-group-count').textContent = `${group.accounts?.length || 0} Akun`;
 
-  const webhookUrl = group.webhookUrl || '';
-  const maskedWebhook = webhookUrl
-    ? webhookUrl.replace(/(webhooks\/\d+\/)[a-zA-Z0-9_-]{10,}/, '$1••••••••')
-    : '(Belum diatur)';
-  document.getElementById('banner-webhook-val').textContent = maskedWebhook;
+  // Render Webhooks List in Banner
+  const webhooksContainer = document.getElementById('banner-webhooks-list');
+  if (webhooksContainer) {
+    let webhooks = Array.isArray(group.webhooks) && group.webhooks.length > 0 ? group.webhooks : [];
+    if (webhooks.length === 0 && group.webhookUrl) {
+      webhooks = [{ url: group.webhookUrl, name: 'Default', events: ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'] }];
+    }
+
+    if (webhooks.length === 0) {
+      webhooksContainer.innerHTML = `
+        <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+          (Belum ada webhook diatur untuk grup ini)
+        </div>
+      `;
+    } else {
+      const allEventsList = ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'];
+      webhooksContainer.innerHTML = webhooks.map((wh, idx) => {
+        const masked = wh.url ? wh.url.replace(/(webhooks\/\d+\/)[a-zA-Z0-9_-]{8,}/, '$1••••••••') : '(Belum diatur)';
+        const evts = Array.isArray(wh.events) && wh.events.length > 0 ? wh.events : allEventsList;
+        const isAll = allEventsList.every((e) => evts.includes(e));
+
+        let badgesHtml = '';
+        if (isAll) {
+          badgesHtml = '<span class="webhook-event-badge badge-all" title="Menerima semua jenis notifikasi">⚡ Semua Notif</span>';
+        } else {
+          if (evts.includes('task_warning')) badgesHtml += '<span class="webhook-event-badge badge-task" title="Peringatan jika target 14 akun belum selesai">⚠️ Task</span>';
+          if (evts.includes('new_video')) badgesHtml += '<span class="webhook-event-badge badge-video" title="Notifikasi postingan video baru">🎬 Video</span>';
+          if (evts.includes('double_upload')) badgesHtml += '<span class="webhook-event-badge badge-double" title="Peringatan upload > 1 video sehari">🔁 Double</span>';
+          if (evts.includes('daily_report')) badgesHtml += '<span class="webhook-event-badge badge-report" title="Laporan harian lengkap">📊 Report</span>';
+          if (evts.includes('account_not_found')) badgesHtml += '<span class="webhook-event-badge badge-account" title="Peringatan akun tiktok tidak ditemukan">🔍 Akun</span>';
+        }
+
+        const displayName = wh.name ? wh.name : (webhooks.length > 1 ? `Webhook #${idx + 1}` : 'Discord Webhook');
+
+        return `
+          <div class="banner-webhook-item">
+            <div class="banner-webhook-left">
+              <span class="banner-webhook-name">📌 ${escapeHtml(displayName)}:</span>
+              <span class="banner-webhook-url">${escapeHtml(masked)}</span>
+              <div class="banner-webhook-badges">${badgesHtml}</div>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button type="button" class="btn btn-xs btn-outline" style="padding: 2px 8px; font-size: 0.72rem; gap: 4px;" onclick="testSingleWebhook('${group.id}', '${encodeURIComponent(wh.url)}')">
+                <span>🧪 Tes</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
 
   // Calculate Group Video Upload Summary (1 Hari, 1 Minggu, 1 Bulan)
   const stats = calculateGroupVideoStats(group, currentStatus?.runtime?.accountCache || {}, currentStatus?.state || {});
@@ -1143,13 +1189,207 @@ document.getElementById('form-add-account').addEventListener('submit', async (e)
   }
 });
 
+// Multi-Webhook Helpers & Management
+const ALL_EVENT_KEYS = ['new_video', 'task_warning', 'double_upload', 'daily_report', 'account_not_found'];
+let modalWebhooks = [];
+
+async function testSingleWebhook(groupId, encodedUrl) {
+  const webhookUrl = decodeURIComponent(encodedUrl || '');
+  if (!webhookUrl) {
+    showToast('URL Webhook tidak valid', true);
+    return;
+  }
+  try {
+    showToast('Mengirim pesan tes ke webhook Discord...');
+    const res = await authFetch('/api/test-webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId, webhookUrl })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ Berhasil terkirim ke Discord!');
+    } else {
+      showToast(`❌ Gagal: ${data.error || data.message}`, true);
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+window.testSingleWebhook = testSingleWebhook;
+
+function renderModalWebhooks() {
+  const container = document.getElementById('modal-webhooks-container');
+  if (!container) return;
+
+  if (!modalWebhooks || modalWebhooks.length === 0) {
+    modalWebhooks = [{
+      url: '',
+      name: 'Webhook Utama',
+      events: [...ALL_EVENT_KEYS]
+    }];
+  }
+
+  container.innerHTML = modalWebhooks.map((wh, idx) => {
+    const events = Array.isArray(wh.events) && wh.events.length > 0 ? wh.events : [...ALL_EVENT_KEYS];
+    const isNewVideo = events.includes('new_video');
+    const isTaskWarning = events.includes('task_warning');
+    const isDoubleUpload = events.includes('double_upload');
+    const isDailyReport = events.includes('daily_report');
+    const isAccountNotFound = events.includes('account_not_found');
+
+    return `
+      <div class="webhook-config-card" data-idx="${idx}">
+        <div class="webhook-card-header">
+          <span class="webhook-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+            </svg>
+            ${escapeHtml(wh.name || `Webhook #${idx + 1}`)}
+          </span>
+          <div class="webhook-card-actions">
+            ${wh.url ? `
+              <button type="button" class="btn btn-xs btn-outline" style="font-size: 0.7rem; padding: 2px 7px;" onclick="testModalWebhook(${idx})">
+                🧪 Tes
+              </button>
+            ` : ''}
+            ${modalWebhooks.length > 1 ? `
+              <button type="button" class="btn btn-xs btn-outline" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; font-size: 0.7rem; padding: 2px 7px;" onclick="removeModalWebhook(${idx})">
+                🗑️ Hapus
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="webhook-card-fields">
+          <input type="text" class="form-input webhook-name-input" placeholder="Label / Nama Webhook (misal: Khusus Task Warning)" value="${escapeHtml(wh.name || '')}" oninput="updateModalWebhookField(${idx}, 'name', this.value)">
+          <input type="url" class="form-input webhook-url-input" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(wh.url || '')}" oninput="updateModalWebhookField(${idx}, 'url', this.value)" required>
+        </div>
+
+        <div class="webhook-preset-bar">
+          <span class="webhook-preset-label">Preset:</span>
+          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'all')">⚡ Semua</button>
+          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'task_only')">⚠️ Khusus Task & Warning</button>
+          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'video_only')">🎬 Khusus Video</button>
+          <button type="button" class="webhook-preset-btn" onclick="applyWebhookPreset(${idx}, 'report_only')">📊 Khusus Report</button>
+        </div>
+
+        <div class="webhook-events-grid">
+          <label class="webhook-event-checkbox-label">
+            <input type="checkbox" ${isTaskWarning ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'task_warning', this.checked)">
+            <span>⚠️ Target Belum Tuntas</span>
+          </label>
+          <label class="webhook-event-checkbox-label">
+            <input type="checkbox" ${isNewVideo ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'new_video', this.checked)">
+            <span>🎬 Video Baru</span>
+          </label>
+          <label class="webhook-event-checkbox-label">
+            <input type="checkbox" ${isDoubleUpload ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'double_upload', this.checked)">
+            <span>🔁 Double Upload</span>
+          </label>
+          <label class="webhook-event-checkbox-label">
+            <input type="checkbox" ${isDailyReport ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'daily_report', this.checked)">
+            <span>📊 Daily Report</span>
+          </label>
+          <label class="webhook-event-checkbox-label">
+            <input type="checkbox" ${isAccountNotFound ? 'checked' : ''} onchange="toggleModalWebhookEvent(${idx}, 'account_not_found', this.checked)">
+            <span>🔍 Akun Tidak Ada</span>
+          </label>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+window.renderModalWebhooks = renderModalWebhooks;
+
+function applyWebhookPreset(idx, type) {
+  if (!modalWebhooks[idx]) return;
+  if (type === 'all') {
+    modalWebhooks[idx].events = [...ALL_EVENT_KEYS];
+    if (!modalWebhooks[idx].name) modalWebhooks[idx].name = 'Semua Notifikasi';
+  } else if (type === 'task_only') {
+    modalWebhooks[idx].events = ['task_warning', 'double_upload', 'account_not_found'];
+    if (!modalWebhooks[idx].name || modalWebhooks[idx].name === 'Semua Notifikasi') {
+      modalWebhooks[idx].name = 'Khusus Task & Warning';
+    }
+  } else if (type === 'video_only') {
+    modalWebhooks[idx].events = ['new_video'];
+    if (!modalWebhooks[idx].name || modalWebhooks[idx].name === 'Semua Notifikasi') {
+      modalWebhooks[idx].name = 'Khusus Video Baru';
+    }
+  } else if (type === 'report_only') {
+    modalWebhooks[idx].events = ['daily_report'];
+    if (!modalWebhooks[idx].name || modalWebhooks[idx].name === 'Semua Notifikasi') {
+      modalWebhooks[idx].name = 'Khusus Daily Report';
+    }
+  }
+  renderModalWebhooks();
+}
+window.applyWebhookPreset = applyWebhookPreset;
+
+function toggleModalWebhookEvent(idx, eventKey, isChecked) {
+  if (!modalWebhooks[idx]) return;
+  if (!Array.isArray(modalWebhooks[idx].events)) {
+    modalWebhooks[idx].events = [...ALL_EVENT_KEYS];
+  }
+  if (isChecked) {
+    if (!modalWebhooks[idx].events.includes(eventKey)) {
+      modalWebhooks[idx].events.push(eventKey);
+    }
+  } else {
+    modalWebhooks[idx].events = modalWebhooks[idx].events.filter((e) => e !== eventKey);
+  }
+}
+window.toggleModalWebhookEvent = toggleModalWebhookEvent;
+
+function updateModalWebhookField(idx, field, value) {
+  if (!modalWebhooks[idx]) return;
+  modalWebhooks[idx][field] = value;
+}
+window.updateModalWebhookField = updateModalWebhookField;
+
+function removeModalWebhook(idx) {
+  if (modalWebhooks.length <= 1) return;
+  modalWebhooks.splice(idx, 1);
+  renderModalWebhooks();
+}
+window.removeModalWebhook = removeModalWebhook;
+
+async function testModalWebhook(idx) {
+  const wh = modalWebhooks[idx];
+  if (!wh || !wh.url) {
+    showToast('Masukkan URL Webhook Discord terlebih dahulu', true);
+    return;
+  }
+  const groupId = document.getElementById('group-modal-id')?.value || activeGroupId;
+  testSingleWebhook(groupId, encodeURIComponent(wh.url));
+}
+window.testModalWebhook = testModalWebhook;
+
 // Group Modal (Create / Edit)
 const groupModal = document.getElementById('group-modal');
+const btnAddModalWebhook = document.getElementById('btn-add-modal-webhook');
+if (btnAddModalWebhook) {
+  btnAddModalWebhook.addEventListener('click', () => {
+    modalWebhooks.push({
+      url: '',
+      name: `Webhook #${modalWebhooks.length + 1}`,
+      events: [...ALL_EVENT_KEYS]
+    });
+    renderModalWebhooks();
+  });
+}
+
 document.getElementById('btn-create-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Buat Grup Channel Baru';
   document.getElementById('group-modal-id').value = '';
   document.getElementById('group-modal-name').value = '';
-  document.getElementById('group-modal-webhook').value = '';
+  modalWebhooks = [{
+    url: '',
+    name: 'Webhook Utama',
+    events: [...ALL_EVENT_KEYS]
+  }];
+  renderModalWebhooks();
   groupModal.classList.add('active');
 });
 
@@ -1160,7 +1400,23 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Edit Grup Channel';
   document.getElementById('group-modal-id').value = currentGroup.id;
   document.getElementById('group-modal-name').value = currentGroup.name;
-  document.getElementById('group-modal-webhook').value = currentGroup.webhookUrl;
+
+  if (Array.isArray(currentGroup.webhooks) && currentGroup.webhooks.length > 0) {
+    modalWebhooks = JSON.parse(JSON.stringify(currentGroup.webhooks));
+  } else if (currentGroup.webhookUrl) {
+    modalWebhooks = [{
+      url: currentGroup.webhookUrl,
+      name: 'Default',
+      events: [...ALL_EVENT_KEYS]
+    }];
+  } else {
+    modalWebhooks = [{
+      url: '',
+      name: 'Webhook Utama',
+      events: [...ALL_EVENT_KEYS]
+    }];
+  }
+  renderModalWebhooks();
   groupModal.classList.add('active');
 });
 
@@ -1175,7 +1431,20 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('group-modal-id').value;
   const name = document.getElementById('group-modal-name').value.trim();
-  const webhookUrl = document.getElementById('group-modal-webhook').value.trim();
+
+  // Validate webhooks
+  const cleanedWebhooks = modalWebhooks
+    .filter((w) => w && w.url && typeof w.url === 'string' && w.url.trim().startsWith('http'))
+    .map((w) => ({
+      url: w.url.trim(),
+      name: (w.name || '').trim(),
+      events: Array.isArray(w.events) && w.events.length > 0 ? w.events : [...ALL_EVENT_KEYS]
+    }));
+
+  if (cleanedWebhooks.length === 0) {
+    showToast('Harap masukkan minimal 1 URL Discord Webhook yang valid (diawali https://)', true);
+    return;
+  }
 
   const isEdit = !!id;
   const url = isEdit ? `/api/groups/${id}` : '/api/groups';
@@ -1185,7 +1454,11 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
     const res = await authFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, webhookUrl })
+      body: JSON.stringify({
+        name,
+        webhooks: cleanedWebhooks,
+        webhookUrl: cleanedWebhooks[0]?.url || ''
+      })
     });
     const data = await res.json();
     if (data.success) {

@@ -365,10 +365,11 @@
               <h3 class="group-banner-name" id="banner-group-name">Nama Grup</h3>
               <span class="group-badge" id="banner-group-count">0 Akun</span>
             </div>
-            <p class="group-banner-webhook" id="banner-group-webhook">
-              <span class="webhook-label">Discord Webhook:</span>
-              <span class="webhook-url-val" id="banner-webhook-val">https://discord.com/...</span>
-            </p>
+            <div class="group-banner-webhooks-wrap" id="banner-group-webhooks" style="margin-top: 6px;">
+              <div id="banner-webhooks-list" style="display: flex; flex-direction: column; gap: 6px;">
+                <!-- Populated by JS -->
+              </div>
+            </div>
 
             <!-- Group Video Activity Summary (1 Hari, 1 Minggu, 1 Bulan) -->
             <div class="group-activity-summary" style="display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;">
@@ -576,9 +577,19 @@
         </div>
 
         <div class="form-group">
-          <label for="group-modal-webhook">URL Discord Webhook Grup</label>
-          <input type="url" id="group-modal-webhook" class="form-input" required placeholder="https://discord.com/api/webhooks/...">
-          <small class="form-help">Notifikasi untuk akun-akun di grup ini hanya akan dikirim ke webhook ini.</small>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin: 0; font-weight: 700;">Daftar Webhook Discord & Filter Notifikasi</label>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-add-modal-webhook" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan); gap: 4px;">
+              <span>+ Tambah Webhook</span>
+            </button>
+          </div>
+          <small class="form-help" style="margin-bottom: 12px; display: block;">
+            Anda dapat menambahkan lebih dari 1 webhook dan mengatur tipe notifikasi untuk masing-masing webhook (misal: webhook khusus peringatan task / target).
+          </small>
+
+          <div id="modal-webhooks-container" class="modal-webhooks-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            <!-- Dynamic Webhook Items Injected by JS -->
+          </div>
         </div>
 
         <div class="modal-actions">

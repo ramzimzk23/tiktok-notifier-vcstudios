@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import ws from 'ws';
+import { ALL_WEBHOOK_EVENTS } from './notifier.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_FILE = path.resolve(__dirname, '../config.json');
@@ -60,10 +61,26 @@ async function readLocalConfig() {
   try {
     const raw = await fs.readFile(CONFIG_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
+    const groups = (parsed.groups || []).map((g) => {
+      let webhooks = [];
+      let primaryUrl = '';
+      if (Array.isArray(g.webhooks) && g.webhooks.length > 0) {
+        webhooks = g.webhooks;
+        primaryUrl = webhooks[0]?.url || g.webhookUrl || '';
+      } else if (g.webhookUrl) {
+        primaryUrl = g.webhookUrl;
+        webhooks = [{ url: g.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+      }
+      return {
+        ...g,
+        webhookUrl: primaryUrl,
+        webhooks
+      };
+    });
     return {
       checkIntervalSeconds: parsed.checkIntervalSeconds || 120,
       delayBetweenAccountsMs: parsed.delayBetweenAccountsMs || 2000,
-      groups: parsed.groups || []
+      groups
     };
   } catch {
     return {
@@ -325,10 +342,30 @@ export async function getFullConfig() {
         const groupAccounts = (accountsData || [])
           .filter((a) => a.group_id === g.id)
           .map((a) => a.username);
+
+        let webhooks = [];
+        let primaryWebhookUrl = '';
+        if (g.webhook_url) {
+          if (g.webhook_url.startsWith('[') || g.webhook_url.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(g.webhook_url);
+              webhooks = Array.isArray(parsed) ? parsed : [parsed];
+              primaryWebhookUrl = webhooks[0]?.url || '';
+            } catch {
+              primaryWebhookUrl = g.webhook_url;
+              webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+            }
+          } else {
+            primaryWebhookUrl = g.webhook_url;
+            webhooks = [{ url: g.webhook_url, name: 'Default', events: ALL_WEBHOOK_EVENTS }];
+          }
+        }
+
         return {
           id: g.id,
           name: g.name,
-          webhookUrl: g.webhook_url,
+          webhookUrl: primaryWebhookUrl,
+          webhooks,
           accounts: groupAccounts
         };
       });
@@ -375,6 +412,12 @@ export async function saveSettings(intervalSeconds, delayMs) {
  * Create or Update a Group
  */
 export async function upsertGroup(group) {
+  const webhooksToSave = Array.isArray(group.webhooks) && group.webhooks.length > 0
+    ? group.webhooks
+    : (group.webhookUrl ? [{ url: group.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS }] : []);
+
+  const storedWebhookValue = webhooksToSave.length > 0 ? JSON.stringify(webhooksToSave) : (group.webhookUrl || '');
+
   if (isSupabaseActive && supabaseClient) {
     try {
       await supabaseClient
@@ -382,7 +425,7 @@ export async function upsertGroup(group) {
         .upsert({
           id: group.id,
           name: group.name,
-          webhook_url: group.webhookUrl || ''
+          webhook_url: storedWebhookValue
         });
     } catch (err) {
       console.error('[DB] Gagal upsert group ke Supabase:', err.message);
@@ -392,10 +435,15 @@ export async function upsertGroup(group) {
   // Update local file for redundancy
   const local = await readLocalConfig();
   const idx = local.groups.findIndex((g) => g.id === group.id);
+  const groupObj = {
+    ...group,
+    webhookUrl: webhooksToSave[0]?.url || group.webhookUrl || '',
+    webhooks: webhooksToSave
+  };
   if (idx >= 0) {
-    local.groups[idx] = { ...local.groups[idx], ...group };
+    local.groups[idx] = { ...local.groups[idx], ...groupObj };
   } else {
-    local.groups.push({ ...group, accounts: group.accounts || [] });
+    local.groups.push({ ...groupObj, accounts: groupObj.accounts || [] });
   }
   await writeLocalConfig(local);
 }
