@@ -457,6 +457,62 @@ function renderGroupBanner(group) {
       warnPill.style.display = 'none';
     }
   }
+
+  // Render Task Deadline & Reminder Indicator
+  const deadlineEl = document.getElementById('banner-deadline-time');
+  const deadlinePill = document.getElementById('banner-deadline-status-pill');
+  if (deadlineEl && deadlinePill) {
+    const deadlineStr = group.taskDeadline || '22:00';
+    deadlineEl.textContent = `${deadlineStr} WIB`;
+
+    if (group.taskReminderEnabled === false) {
+      deadlinePill.textContent = '⚪ Reminder Nonaktif';
+      deadlinePill.style.background = 'rgba(255, 255, 255, 0.05)';
+      deadlinePill.style.color = 'var(--text-muted)';
+      deadlinePill.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+    } else {
+      const reminderMins = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false
+      }).formatToParts(now);
+      const curHour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+      const curMin = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+      const curTotalMin = curHour * 60 + curMin;
+
+      const [dH, dM] = deadlineStr.split(':');
+      const dTotalMin = (parseInt(dH, 10) || 22) * 60 + (parseInt(dM, 10) || 0);
+      const reminderStartMin = Math.max(0, dTotalMin - reminderMins);
+
+      const targetCount = group.accounts?.length > 0 ? Math.min(14, group.accounts.length) : 14;
+      const isCompleted = stats.today >= targetCount;
+
+      if (isCompleted) {
+        deadlinePill.textContent = '✅ Target Tuntas Hari Ini';
+        deadlinePill.style.background = 'rgba(16, 185, 129, 0.15)';
+        deadlinePill.style.color = '#34d399';
+        deadlinePill.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      } else if (curTotalMin >= reminderStartMin && curTotalMin < dTotalMin) {
+        deadlinePill.textContent = `⏰ Reminder Aktif (${dTotalMin - curTotalMin} Menit Lagi)`;
+        deadlinePill.style.background = 'rgba(245, 158, 11, 0.18)';
+        deadlinePill.style.color = '#fbbf24';
+        deadlinePill.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      } else if (curTotalMin >= dTotalMin) {
+        deadlinePill.textContent = '🚨 Batas Waktu Terlewati';
+        deadlinePill.style.background = 'rgba(239, 68, 68, 0.18)';
+        deadlinePill.style.color = '#f87171';
+        deadlinePill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+      } else {
+        deadlinePill.textContent = `⏳ Reminder Aktif (${reminderMins} Menit Sebelum)`;
+        deadlinePill.style.background = 'rgba(37, 244, 238, 0.12)';
+        deadlinePill.style.color = 'var(--tiktok-cyan)';
+        deadlinePill.style.borderColor = 'rgba(37, 244, 238, 0.3)';
+      }
+    }
+  }
 }
 
 // Daily Report State & Renderer
@@ -1384,6 +1440,9 @@ document.getElementById('btn-create-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Buat Grup Channel Baru';
   document.getElementById('group-modal-id').value = '';
   document.getElementById('group-modal-name').value = '';
+  document.getElementById('group-modal-deadline').value = '22:00';
+  document.getElementById('group-modal-reminder-mins').value = '10';
+  document.getElementById('group-modal-reminder-enabled').checked = true;
   modalWebhooks = [{
     url: '',
     name: 'Webhook Utama',
@@ -1400,6 +1459,9 @@ document.getElementById('btn-edit-group').addEventListener('click', () => {
   document.getElementById('group-modal-title').textContent = 'Edit Grup Channel';
   document.getElementById('group-modal-id').value = currentGroup.id;
   document.getElementById('group-modal-name').value = currentGroup.name;
+  document.getElementById('group-modal-deadline').value = currentGroup.taskDeadline || '22:00';
+  document.getElementById('group-modal-reminder-mins').value = String(currentGroup.taskReminderMinutes !== undefined ? currentGroup.taskReminderMinutes : 10);
+  document.getElementById('group-modal-reminder-enabled').checked = currentGroup.taskReminderEnabled !== false;
 
   if (Array.isArray(currentGroup.webhooks) && currentGroup.webhooks.length > 0) {
     modalWebhooks = JSON.parse(JSON.stringify(currentGroup.webhooks));
@@ -1450,6 +1512,10 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
   const url = isEdit ? `/api/groups/${id}` : '/api/groups';
   const method = isEdit ? 'PUT' : 'POST';
 
+  const taskDeadline = document.getElementById('group-modal-deadline')?.value || '22:00';
+  const taskReminderMinutes = Number(document.getElementById('group-modal-reminder-mins')?.value || 10);
+  const taskReminderEnabled = document.getElementById('group-modal-reminder-enabled')?.checked ?? true;
+
   try {
     const res = await authFetch(url, {
       method,
@@ -1457,7 +1523,10 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
       body: JSON.stringify({
         name,
         webhooks: cleanedWebhooks,
-        webhookUrl: cleanedWebhooks[0]?.url || ''
+        webhookUrl: cleanedWebhooks[0]?.url || '',
+        taskDeadline,
+        taskReminderMinutes,
+        taskReminderEnabled
       })
     });
     const data = await res.json();
@@ -1475,6 +1544,40 @@ document.getElementById('form-group').addEventListener('submit', async (e) => {
     showToast(err.message, true);
   }
 });
+
+// Test Task Reminder Button in Group Banner
+const btnTestReminder = document.getElementById('btn-trigger-test-reminder');
+if (btnTestReminder) {
+  btnTestReminder.addEventListener('click', async () => {
+    if (!activeGroupId) return;
+    const group = currentStatus?.config?.groups?.find((g) => g.id === activeGroupId);
+    if (!group) return;
+
+    btnTestReminder.disabled = true;
+    const originalText = btnTestReminder.innerHTML;
+    btnTestReminder.innerHTML = '<span>⏳ Mengirim...</span>';
+
+    try {
+      showToast(`Mengirim simulasi reminder task untuk grup "${group.name}" ke Discord...`);
+      const res = await authFetch('/api/daily-report/warn-incomplete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: group.id, reminderType: '10_min_reminder' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✅ Reminder task berhasil dikirim ke webhook Discord!');
+      } else {
+        showToast(`❌ Gagal: ${data.error}`, true);
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btnTestReminder.disabled = false;
+      btnTestReminder.innerHTML = originalText;
+    }
+  });
+}
 
 // Delete Group
 document.getElementById('btn-delete-group').addEventListener('click', async () => {

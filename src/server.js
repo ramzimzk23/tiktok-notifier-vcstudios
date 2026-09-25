@@ -551,16 +551,23 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         const id = 'group-' + Date.now();
+        const taskDeadline = (body.taskDeadline || '22:00').trim();
+        const taskReminderMinutes = body.taskReminderMinutes !== undefined ? Number(body.taskReminderMinutes) : 10;
+        const taskReminderEnabled = body.taskReminderEnabled !== undefined ? Boolean(body.taskReminderEnabled) : true;
+
         const newGroup = {
           id,
           name,
           webhookUrl: webhooks[0]?.url || fallbackUrl || '',
           webhooks,
+          taskDeadline,
+          taskReminderMinutes,
+          taskReminderEnabled,
           accounts: []
         };
 
         await upsertGroup(newGroup);
-        addLog(`Grup baru "${name}" berhasil dibuat (${webhooks.length} webhook terkonfigurasi)`, 'success');
+        addLog(`Grup baru "${name}" berhasil dibuat (${webhooks.length} webhook, deadline: ${taskDeadline} WIB)`, 'success');
         sendJson({ success: true, group: newGroup });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
@@ -601,8 +608,12 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           }
         }
 
+        if (body.taskDeadline !== undefined) group.taskDeadline = String(body.taskDeadline).trim() || '22:00';
+        if (body.taskReminderMinutes !== undefined) group.taskReminderMinutes = Number(body.taskReminderMinutes);
+        if (body.taskReminderEnabled !== undefined) group.taskReminderEnabled = Boolean(body.taskReminderEnabled);
+
         await upsertGroup(group);
-        addLog(`Grup "${group.name}" berhasil diperbarui (${group.webhooks?.length || 0} webhook terkonfigurasi)`, 'success');
+        addLog(`Grup "${group.name}" berhasil diperbarui (deadline: ${group.taskDeadline || '22:00'} WIB, ${group.webhooks?.length || 0} webhook)`, 'success');
         sendJson({ success: true, group });
       } catch (err) {
         sendJson({ success: false, error: err.message }, 500);
@@ -895,12 +906,18 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         }
 
         const report = generateDailyReportData(group, runtimeState.accountCache);
+        const reminderType = body.reminderType || '10_min_reminder';
         const sent = await sendDiscordIncompleteWarning(
           group,
           group.name,
           report.uploadedCount,
           report.target,
-          report.missing
+          report.missing,
+          {
+            reminderType,
+            deadlineTime: group.taskDeadline || '22:00',
+            reminderMinutes: group.taskReminderMinutes || 10
+          }
         );
 
         if (!sent) {

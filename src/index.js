@@ -19,7 +19,9 @@ const warnedNotFoundAccounts = new Set();
 const dailyAlertsTracker = {
   currentDate: '',
   doubleUploads: new Set(),
-  incompleteWarnings: new Set()
+  incompleteWarnings: new Set(),
+  reminders10Min: new Set(),
+  deadlineWarnings: new Set()
 };
 
 let isPolling = false;
@@ -180,32 +182,8 @@ export async function runPoll(isManual = false) {
       await writeLocalCache(runtimeState.accountCache);
     }
 
-    // Check if any group has incomplete quota (< 14 videos)
-    // Warning is pushed only 1x per day (in evening >= 18:00 WIB or when manual trigger)
-    const currentHourWIB = Number(
-      new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Jakarta' }).format(new Date())
-    );
-    if (currentHourWIB >= 18 || isManual) {
-      for (const group of groups) {
-        const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
-        if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
-        const incompleteKey = `${group.id}:${nowWIB}`;
-        if (!dailyAlertsTracker.incompleteWarnings.has(incompleteKey)) {
-          const report = generateDailyReportData(group, runtimeState.accountCache);
-          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
-            dailyAlertsTracker.incompleteWarnings.add(incompleteKey);
-            addLog(`⚠️ PERINGATAN TARGET: Grup ${group.name} belum selesai (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
-            await sendDiscordIncompleteWarning(
-              group,
-              group.name,
-              report.uploadedCount,
-              report.target,
-              report.missing
-            );
-          }
-        }
-      }
-    }
+    // Check task deadlines and reminders (10 min before deadline & at deadline)
+    await checkTaskDeadlinesAndReminders(isManual);
 
     addLog(`Scan selesai (${processedCount}/${totalAccounts} akun). Siklus berikutnya dalam ${intervalSeconds} detik.`, 'success');
   } catch (err) {
@@ -222,6 +200,104 @@ export async function runPoll(isManual = false) {
     nextPollTimer = setTimeout(() => {
       runPoll(false);
     }, intervalSeconds * 1000);
+  }
+}
+
+/**
+ * Automatically check task deadlines and push reminders:
+ * 1. 10 minutes (or configured reminder minutes) before deadline if incomplete
+ * 2. At or after deadline if still incomplete
+ * Resets daily and guarantees exactly 1 notification per alert type per day (no spamming).
+ */
+export async function checkTaskDeadlinesAndReminders(isManual = false) {
+  try {
+    const config = await getFullConfig();
+    const groups = config.groups || [];
+    if (groups.length === 0) return;
+
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(now);
+    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+    const currentMinutes = hour * 60 + minute;
+
+    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+    if (dailyAlertsTracker.currentDate !== nowWIB) {
+      dailyAlertsTracker.currentDate = nowWIB;
+      dailyAlertsTracker.doubleUploads.clear();
+      dailyAlertsTracker.incompleteWarnings.clear();
+      dailyAlertsTracker.reminders10Min.clear();
+      dailyAlertsTracker.deadlineWarnings.clear();
+    }
+
+    for (const group of groups) {
+      if (group.taskReminderEnabled === false && !isManual) continue;
+      const hasWebhooks = (Array.isArray(group.webhooks) && group.webhooks.length > 0) || !!group.webhookUrl;
+      if (!hasWebhooks || !group.accounts || group.accounts.length === 0) continue;
+
+      const deadlineStr = (group.taskDeadline || '22:00').trim();
+      const [dHourStr, dMinStr] = deadlineStr.split(':');
+      const dHour = parseInt(dHourStr, 10) || 22;
+      const dMin = parseInt(dMinStr, 10) || 0;
+      const deadlineTotalMinutes = dHour * 60 + dMin;
+      const reminderBeforeMins = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
+      const reminderStartMinutes = Math.max(0, deadlineTotalMinutes - reminderBeforeMins);
+
+      const groupKey = `${group.id}:${nowWIB}`;
+
+      // 1. Reminder window (e.g. 10 minutes before deadline up to deadline)
+      if ((currentMinutes >= reminderStartMinutes && currentMinutes < deadlineTotalMinutes) || isManual) {
+        if (!dailyAlertsTracker.reminders10Min.has(groupKey)) {
+          const report = generateDailyReportData(group, runtimeState.accountCache);
+          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
+            dailyAlertsTracker.reminders10Min.add(groupKey);
+            addLog(`⏰ REMINDER TASK (${reminderBeforeMins} MENIT SEBELUM DEADLINE): Tim "${group.name}" belum tuntas (${report.uploadedCount}/14 akun). Peringatan 1x dikirim ke Discord.`, 'warn');
+            await sendDiscordIncompleteWarning(
+              group,
+              group.name,
+              report.uploadedCount,
+              report.target,
+              report.missing,
+              {
+                reminderType: '10_min_reminder',
+                deadlineTime: deadlineStr,
+                reminderMinutes: reminderBeforeMins
+              }
+            );
+          }
+        }
+      }
+
+      // 2. Deadline Reached (at or after deadline)
+      if (currentMinutes >= deadlineTotalMinutes) {
+        if (!dailyAlertsTracker.deadlineWarnings.has(groupKey)) {
+          const report = generateDailyReportData(group, runtimeState.accountCache);
+          if (!report.isCompleted && (report.remainingNeeded > 0 || report.uploadedCount < 14)) {
+            dailyAlertsTracker.deadlineWarnings.add(groupKey);
+            addLog(`🚨 BATAS WAKTU SELESAI: Waktu task tim "${group.name}" telah habis (${deadlineStr} WIB). Hasil: ${report.uploadedCount}/14 akun selesai. Peringatan 1x dikirim ke Discord.`, 'warn');
+            await sendDiscordIncompleteWarning(
+              group,
+              group.name,
+              report.uploadedCount,
+              report.target,
+              report.missing,
+              {
+                reminderType: 'deadline_reached',
+                deadlineTime: deadlineStr,
+                reminderMinutes: reminderBeforeMins
+              }
+            );
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Reminder] Error checking task deadlines:', err.message);
   }
 }
 
@@ -252,6 +328,11 @@ async function main() {
   });
 
   addLog(`Sistem VCStudios TikTok Notifier siap. Database: ${dbStatus}`, 'success');
+
+  // Dedicated background ticker for task deadlines and reminders (runs every 30s)
+  setInterval(() => {
+    checkTaskDeadlinesAndReminders(false);
+  }, 30000);
 
   // Trigger background poll asynchronously after 3s delay (does NOT block server startup)
   setTimeout(() => {

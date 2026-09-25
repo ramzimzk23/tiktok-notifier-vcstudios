@@ -228,7 +228,14 @@ export async function sendDiscordDoubleUploadWarning(target, groupName, username
 /**
  * Send Discord Warning if Daily Quota is Incomplete (Target: 14 accounts each uploading 1 video)
  */
-export async function sendDiscordIncompleteWarning(target, groupName, completedCount, targetCount = 14, missingAccounts = []) {
+export async function sendDiscordIncompleteWarning(
+  target,
+  groupName,
+  completedCount,
+  targetCount = 14,
+  missingAccounts = [],
+  options = {}
+) {
   // If 14 or more accounts have uploaded, target is COMPLETE -> Do not send warning!
   if (completedCount >= targetCount) return false;
 
@@ -236,23 +243,52 @@ export async function sendDiscordIncompleteWarning(target, groupName, completedC
   if (urls.length === 0) return false;
 
   const remainingNeeded = Math.max(0, targetCount - completedCount);
-  const missingList = (missingAccounts || []).slice(0, remainingNeeded).map((acc, i) => `${i + 1}. @${acc}`).join('\n') || 'Tidak ada.';
-  const moreText = (missingAccounts || []).length > remainingNeeded ? `\n... dan ${(missingAccounts || []).length - remainingNeeded} akun lainnya` : '';
+  const missingList = (missingAccounts || []).slice(0, 14).map((acc, i) => `${i + 1}. @${acc}`).join('\n') || 'Tidak ada.';
+  const moreText = (missingAccounts || []).length > 14 ? `\n... dan ${(missingAccounts || []).length - 14} akun lainnya` : '';
+
+  const {
+    reminderType = 'standard', // '10_min_reminder' | 'deadline_reached' | 'standard'
+    deadlineTime = '22:00',
+    reminderMinutes = 10
+  } = options;
+
+  let title = '';
+  let description = '';
+  let content = '';
+  let color = 0xffaa00; // Amber
+
+  if (reminderType === '10_min_reminder') {
+    title = `⏰ Peringatan Task: ${reminderMinutes} Menit Menuju Batas Waktu (${deadlineTime} WIB)`;
+    description = `Perhatian untuk tim clippers **${groupName}**!\nBatas waktu penyelesaian task harian akan berakhir dalam **${reminderMinutes} menit lagi** (pukul **${deadlineTime} WIB**).\n\nSaat ini baru **${completedCount} dari ${targetCount} akun** yang selesai mengunggah (masih kurang **${remainingNeeded} akun** lagi). Segera upload sebelum batas waktu berakhir!`;
+    content = `@everyone ⏰ **REMINDER TASK (${reminderMinutes} MENIT LAGI):** Batas waktu task harian grup **${groupName}** berakhir pada pukul **${deadlineTime} WIB**! Baru **${completedCount}/${targetCount} akun** selesai. Segera upload sebelum waktu habis!`;
+    color = 0xf59e0b; // Amber / Orange
+  } else if (reminderType === 'deadline_reached') {
+    title = `🚨 Batas Waktu Task Selesai (${deadlineTime} WIB): Kuota Belum Tercapai!`;
+    description = `Batas waktu penyelesaian task harian untuk grup **${groupName}** telah **HABIS** pada pukul **${deadlineTime} WIB**.\nTarget kuota **1 video di ${targetCount} akun** belum tuntas.`;
+    content = `@everyone 🚨 **BATAS WAKTU SELESAI (${deadlineTime} WIB):** Task harian grup **${groupName}** belum tuntas! Hanya tercapai **${completedCount}/${targetCount} akun** (kurang **${remainingNeeded} akun**).`;
+    color = 0xef4444; // Red
+  } else {
+    title = `⚠️ Target Kuota Harian Belum Selesai (${completedCount}/${targetCount} Akun)`;
+    description = `Grup **${groupName}** ditargetkan **1 video di ${targetCount} akun = Selesai**.\nSaat ini baru **${completedCount} akun** yang selesai mengunggah (kurang **${remainingNeeded} akun** lagi).`;
+    content = `@everyone ⚠️ **PERINGATAN TARGET BELUM SELESAI:** Grup **${groupName}** baru menyelesaikan ${completedCount}/${targetCount} akun hari ini (kurang ${remainingNeeded} akun lagi)!`;
+    color = 0xffaa00;
+  }
 
   const payload = {
     username: 'VCStudios Bot',
     avatar_url: 'https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/favicon.ico',
-    content: `@everyone ⚠️ **PERINGATAN TARGET BELUM SELESAI:** Grup ${groupName} baru menyelesaikan ${completedCount}/${targetCount} akun hari ini (kurang ${remainingNeeded} akun lagi)!`,
+    content,
     allowed_mentions: {
       parse: ['everyone']
     },
     embeds: [
       {
-        title: `⚠️ Target Kuota Harian Belum Selesai (${completedCount}/${targetCount} Akun)`,
-        description: `Grup **${groupName}** ditargetkan **1 video di ${targetCount} akun = Selesai**.\nSaat ini baru **${completedCount} akun** yang selesai mengunggah (kurang **${remainingNeeded} akun** lagi).`,
-        color: 0xffaa00, // Amber warning
+        title,
+        description,
+        color,
         fields: [
           { name: '📁 Grup Saluran', value: `\`${groupName}\``, inline: true },
+          { name: '⏰ Batas Waktu (Deadline)', value: `\`${deadlineTime} WIB\``, inline: true },
           { name: '🎯 Status Target', value: `**${completedCount} / ${targetCount} Akun** (${remainingNeeded} Belum)`, inline: true },
           { name: `❌ Akun yang Belum Upload (${remainingNeeded} Lagi Menuju Target)`, value: missingList + moreText, inline: false }
         ],
@@ -265,7 +301,7 @@ export async function sendDiscordIncompleteWarning(target, groupName, completedC
     ]
   };
 
-  return await dispatchDiscordPayload(urls, payload, 'Peringatan Target Belum Tuntas');
+  return await dispatchDiscordPayload(urls, payload, `Peringatan Target (${reminderType})`);
 }
 
 /**

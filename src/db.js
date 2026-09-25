@@ -74,7 +74,10 @@ async function readLocalConfig() {
       return {
         ...g,
         webhookUrl: primaryUrl,
-        webhooks
+        webhooks,
+        taskDeadline: g.taskDeadline || '22:00',
+        taskReminderMinutes: g.taskReminderMinutes !== undefined ? Number(g.taskReminderMinutes) : 10,
+        taskReminderEnabled: g.taskReminderEnabled !== undefined ? Boolean(g.taskReminderEnabled) : true
       };
     });
     return {
@@ -345,11 +348,22 @@ export async function getFullConfig() {
 
         let webhooks = [];
         let primaryWebhookUrl = '';
+        let taskDeadline = '22:00';
+        let taskReminderMinutes = 10;
+        let taskReminderEnabled = true;
+
         if (g.webhook_url) {
           if (g.webhook_url.startsWith('[') || g.webhook_url.startsWith('{')) {
             try {
               const parsed = JSON.parse(g.webhook_url);
-              webhooks = Array.isArray(parsed) ? parsed : [parsed];
+              if (Array.isArray(parsed)) {
+                webhooks = parsed;
+              } else if (parsed && typeof parsed === 'object') {
+                webhooks = Array.isArray(parsed.webhooks) ? parsed.webhooks : [];
+                if (parsed.taskDeadline) taskDeadline = parsed.taskDeadline;
+                if (parsed.taskReminderMinutes !== undefined) taskReminderMinutes = Number(parsed.taskReminderMinutes);
+                if (parsed.taskReminderEnabled !== undefined) taskReminderEnabled = Boolean(parsed.taskReminderEnabled);
+              }
               primaryWebhookUrl = webhooks[0]?.url || '';
             } catch {
               primaryWebhookUrl = g.webhook_url;
@@ -366,6 +380,9 @@ export async function getFullConfig() {
           name: g.name,
           webhookUrl: primaryWebhookUrl,
           webhooks,
+          taskDeadline,
+          taskReminderMinutes,
+          taskReminderEnabled,
           accounts: groupAccounts
         };
       });
@@ -416,7 +433,16 @@ export async function upsertGroup(group) {
     ? group.webhooks
     : (group.webhookUrl ? [{ url: group.webhookUrl, name: 'Default', events: ALL_WEBHOOK_EVENTS }] : []);
 
-  const storedWebhookValue = webhooksToSave.length > 0 ? JSON.stringify(webhooksToSave) : (group.webhookUrl || '');
+  const taskDeadline = group.taskDeadline || '22:00';
+  const taskReminderMinutes = group.taskReminderMinutes !== undefined ? Number(group.taskReminderMinutes) : 10;
+  const taskReminderEnabled = group.taskReminderEnabled !== undefined ? Boolean(group.taskReminderEnabled) : true;
+
+  const storedWebhookValue = JSON.stringify({
+    webhooks: webhooksToSave,
+    taskDeadline,
+    taskReminderMinutes,
+    taskReminderEnabled
+  });
 
   if (isSupabaseActive && supabaseClient) {
     try {
@@ -438,7 +464,10 @@ export async function upsertGroup(group) {
   const groupObj = {
     ...group,
     webhookUrl: webhooksToSave[0]?.url || group.webhookUrl || '',
-    webhooks: webhooksToSave
+    webhooks: webhooksToSave,
+    taskDeadline,
+    taskReminderMinutes,
+    taskReminderEnabled
   };
   if (idx >= 0) {
     local.groups[idx] = { ...local.groups[idx], ...groupObj };

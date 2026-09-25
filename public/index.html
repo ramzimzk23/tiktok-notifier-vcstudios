@@ -390,6 +390,22 @@
                 <strong id="summary-invalid" style="color: #fca5a5; font-size: 0.88rem;">0 Akun</strong>
               </div>
             </div>
+
+            <!-- Group Task Deadline & Reminder Indicator Bar -->
+            <div class="group-deadline-bar" id="banner-deadline-bar" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; background: rgba(245, 158, 11, 0.07); border: 1px solid rgba(245, 158, 11, 0.22); border-radius: 8px; padding: 7px 12px; font-size: 0.8rem; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="color: #f59e0b; font-weight: 700; display: flex; align-items: center; gap: 5px;">
+                  ⏰ <span>Batas Waktu Task:</span>
+                </span>
+                <span id="banner-deadline-time" style="color: #fff; font-family: var(--font-mono); font-weight: 700;">22:00 WIB</span>
+                <span id="banner-deadline-status-pill" class="badge" style="background: rgba(37, 244, 238, 0.15); color: var(--tiktok-cyan); border: 1px solid rgba(37, 244, 238, 0.3); font-size: 0.72rem; padding: 2px 7px; border-radius: 4px;">
+                  ⏳ Reminder Aktif (10 Menit Sebelum)
+                </span>
+              </div>
+              <button type="button" class="btn btn-xs btn-outline" id="btn-trigger-test-reminder" style="border-color: rgba(245, 158, 11, 0.4); color: #f59e0b; font-size: 0.72rem; padding: 3px 8px; gap: 4px;">
+                <span>⚡ Tes Peringatan Task</span>
+              </button>
+            </div>
           </div>
           <div class="group-banner-actions">
             <button class="btn btn-secondary btn-sm" id="btn-test-group-webhook">
@@ -589,6 +605,43 @@
 
           <div id="modal-webhooks-container" class="modal-webhooks-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
             <!-- Dynamic Webhook Items Injected by JS -->
+          </div>
+        </div>
+
+        <!-- Task Deadline & Reminder Settings -->
+        <div class="form-group" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 14px 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin: 0; font-weight: 700; color: #f59e0b; display: flex; align-items: center; gap: 6px;">
+              <span>⏰ Batas Waktu Task & Reminder Harian</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.78rem; color: var(--text-secondary);">
+              <input type="checkbox" id="group-modal-reminder-enabled" checked style="accent-color: #f59e0b; cursor: pointer;">
+              <span>Aktifkan Reminder</span>
+            </label>
+          </div>
+          <small class="form-help" style="margin-bottom: 12px; display: block;">
+            Peringatan otomatis akan dikirim ke webhook Discord 10 menit sebelum batas waktu jika target 14 akun belum selesai (1x push terhighlight, tidak spamming).
+          </small>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label for="group-modal-deadline" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+                Batas Waktu Selesai (WIB):
+              </label>
+              <input type="time" id="group-modal-deadline" class="form-input" value="22:00" required style="font-family: var(--font-mono);">
+            </div>
+            <div>
+              <label for="group-modal-reminder-mins" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 4px; display: block;">
+                Waktu Peringatan:
+              </label>
+              <select id="group-modal-reminder-mins" class="form-input" style="padding: 9px 10px;">
+                <option value="10" selected>10 Menit Sebelum Selesai</option>
+                <option value="15">15 Menit Sebelum Selesai</option>
+                <option value="30">30 Menit Sebelum Selesai</option>
+                <option value="60">60 Menit (1 Jam) Sebelum</option>
+                <option value="5">5 Menit Sebelum Selesai</option>
+              </select>
+            </div>
           </div>
         </div>
 
