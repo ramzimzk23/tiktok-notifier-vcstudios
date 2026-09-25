@@ -36,6 +36,7 @@ const dailyAlertsTracker = {
 let isPolling = false;
 let nextPollTimer = null;
 const BATCH_CONCURRENCY = 4; // Concurrently scan 4 accounts at a time for high speed & safe pacing
+const lastAccountScanTimes = new Map(); // Tracks last scan timestamp per account to throttle redundant checks
 
 export async function runPoll(isManual = false) {
   if (isPolling) {
@@ -50,27 +51,127 @@ export async function runPoll(isManual = false) {
     nextPollTimer = null;
   }
 
-  let intervalSeconds = 120;
+  let intervalSeconds = 480;
 
   try {
     const config = await getFullConfig();
-    intervalSeconds = config.checkIntervalSeconds || 120;
     const delayBetweenBatchesMs = Math.max(800, config.delayBetweenAccountsMs || 1200);
     const groups = config.groups || [];
 
-    // Flatten all accounts into a queue of tasks
+    // Time-of-Day Adaptive Scheduling in WIB
+    const now = new Date();
+    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+    if (dailyAlertsTracker.currentDate !== nowWIB) {
+      dailyAlertsTracker.currentDate = nowWIB;
+      dailyAlertsTracker.doubleUploads.clear();
+      dailyAlertsTracker.incompleteWarnings.clear();
+      dailyAlertsTracker.reminders10Min.clear();
+      dailyAlertsTracker.deadlineWarnings.clear();
+      dailyAlertsTracker.completedAlerts.clear();
+      dailyAlertsTracker.morningGreetings.clear();
+      dailyAlertsTracker.noonCheckIns.clear();
+      runtimeState.lastPeriodicWarningTimestamps?.clear();
+      lastAccountScanTimes.clear();
+    }
+    const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
+    const endOfDayWIB = startOfDayWIB + 86400;
+
+    const nowParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false
+    }).formatToParts(now);
+    const curHourWIB = Number(nowParts.find((p) => p.type === 'hour')?.value || 0);
+    const curMinuteWIB = Number(nowParts.find((p) => p.type === 'minute')?.value || 0);
+    const totalMinutesWIB = curHourWIB * 60 + curMinuteWIB;
+
+    // Active clipper working hours: 09:30 WIB to 22:15 WIB
+    const isActiveWorkHours = totalMinutesWIB >= 570 && totalMinutesWIB < 1335;
+    const isWindDownHours = totalMinutesWIB >= 1335 && totalMinutesWIB < 1380; // 22:15 - 23:00 WIB
+
+    if (isActiveWorkHours) {
+      // 8 minutes cycle during active work hours ensures prompt notifications while saving 75% bandwidth
+      intervalSeconds = Math.max(360, config.checkIntervalSeconds ? Math.max(360, config.checkIntervalSeconds) : 480);
+    } else if (isWindDownHours) {
+      intervalSeconds = 600; // 10 minutes
+    } else {
+      intervalSeconds = 1800; // 30 minutes during night sleep hours (23:00 - 09:30 WIB)
+    }
+
+    // Pre-determine which groups have already completed their 14-video quota today
+    const completedGroupIds = new Set();
+    for (const g of groups) {
+      let upCount = 0;
+      for (const a of g.accounts || []) {
+        const c = runtimeState.accountCache[a.toLowerCase()];
+        const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
+        if (cv.some((v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB)) {
+          upCount++;
+        }
+      }
+      const gTarget = g.accounts?.length > 0 ? Math.min(14, g.accounts.length) : 14;
+      if (upCount >= gTarget) {
+        completedGroupIds.add(g.id);
+      }
+    }
+
+    // Smart Differential Queue Filtering (Bandwidth Optimization for Render 5GB Limit):
+    // - Pending accounts (haven't uploaded today) during active hours: scanned EVERY cycle
+    // - Accounts that already uploaded today: scanned only once every 45 mins (double upload check)
+    // - Accounts in completed groups (quota done): scanned only once every 60 mins
+    // - Off-hours (night): scanned once every 45 mins
+    // - Manual trigger: scans 100% of accounts immediately
     const queue = [];
+    let skippedCount = 0;
+
     for (const group of groups) {
       const webhookUrl = group.webhookUrl;
       const groupName = group.name || group.id;
+      const isGroupDone = completedGroupIds.has(group.id);
+
       for (const account of group.accounts || []) {
-        queue.push({
-          account,
-          webhookUrl,
-          group,
-          groupName,
-          groupId: group.id
-        });
+        const cleanUser = account.toLowerCase();
+        const lastScan = lastAccountScanTimes.get(cleanUser) || 0;
+        const timeSinceLastScan = Date.now() - lastScan;
+
+        let shouldScan = false;
+        if (isManual) {
+          shouldScan = true;
+        } else if (!isActiveWorkHours) {
+          // Night sleep hours: check each account once every 45 mins
+          shouldScan = timeSinceLastScan >= 45 * 60 * 1000;
+        } else if (isGroupDone) {
+          // Target 14 done: check once every 60 mins
+          shouldScan = timeSinceLastScan >= 60 * 60 * 1000;
+        } else {
+          // Active work hours: check if account already uploaded today
+          const c = runtimeState.accountCache[cleanUser];
+          const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
+          const hasUploadedToday = cv.some(
+            (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+          );
+
+          if (hasUploadedToday) {
+            // Already uploaded today: check once every 45 mins for double uploads
+            shouldScan = timeSinceLastScan >= 45 * 60 * 1000;
+          } else {
+            // High priority: clipper has NOT uploaded today, scan every cycle!
+            shouldScan = true;
+          }
+        }
+
+        if (shouldScan) {
+          queue.push({
+            account,
+            webhookUrl,
+            group,
+            groupName,
+            groupId: group.id
+          });
+        } else {
+          skippedCount++;
+        }
       }
     }
 
@@ -80,24 +181,16 @@ export async function runPoll(isManual = false) {
       current: 0,
       total: totalAccounts,
       currentAccount: '',
-      status: 'scanning'
+      status: totalAccounts > 0 ? 'scanning' : 'idle'
     };
 
-    const reason = isManual ? '(Manual Trigger)' : '(Jadwal Berkala)';
-    addLog(`Memulai scan ${reason}: ${totalAccounts} akun di ${groups.length} grup (Batch Concurrency: ${BATCH_CONCURRENCY})...`, 'info');
+    const scanMode = isManual
+      ? '(Manual Trigger)'
+      : (isActiveWorkHours ? `(Mode Aktif: ${queue.length} akun dipindai, ${skippedCount} dihemat)` : `(Mode Malam: ${queue.length} akun dipindai, ${skippedCount} dihemat)`);
+    addLog(`Memulai scan ${scanMode}: ${queue.length} akun (Batch Concurrency: ${BATCH_CONCURRENCY})...`, 'info');
 
     let processedCount = 0;
     let cacheDirty = false;
-
-    // Check and reset daily alerts if a new day in WIB has arrived
-    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
-    if (dailyAlertsTracker.currentDate !== nowWIB) {
-      dailyAlertsTracker.currentDate = nowWIB;
-      dailyAlertsTracker.doubleUploads.clear();
-      dailyAlertsTracker.incompleteWarnings.clear();
-    }
-    const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
-    const endOfDayWIB = startOfDayWIB + 86400;
 
     // Process accounts in parallel batches
     for (let i = 0; i < queue.length; i += BATCH_CONCURRENCY) {
@@ -109,6 +202,12 @@ export async function runPoll(isManual = false) {
           const result = await checkAccount(item.account, item.group || item.webhookUrl, item.groupName, false);
 
           if (result && result.success && result.user) {
+            const cleanAcc = item.account.toLowerCase();
+            const existingCache = runtimeState.accountCache[cleanAcc];
+            const newLatestId = result.videos?.[0]?.id || null;
+            const oldLatestId = existingCache?.latestVideo?.id || existingCache?.recentVideos?.[0]?.id || null;
+            const hasNewVideo = newLatestId && newLatestId !== oldLatestId;
+
             const cacheItem = {
               user: result.user,
               groupId: item.groupId,
@@ -119,15 +218,20 @@ export async function runPoll(isManual = false) {
                 createTime: v.createTime,
                 desc: v.desc || '',
                 url: v.url,
-                webhookSent: v.webhookSent === true
+                webhookSent: v.webhookSent === true || (existingCache?.recentVideos?.find((x) => x.id === v.id)?.webhookSent === true)
               })),
               lastUpdated: Date.now()
             };
-            runtimeState.accountCache[item.account.toLowerCase()] = cacheItem;
-            saveAccountCacheToDb(item.account, cacheItem).catch(() => {});
-            const accKey = `${item.groupId}:${item.account.toLowerCase()}`;
+            runtimeState.accountCache[cleanAcc] = cacheItem;
+            lastAccountScanTimes.set(cleanAcc, Date.now());
+
+            // BANDWIDTH SAVING: Only write to Supabase cloud if cache was empty or a new video was found!
+            if (!existingCache || hasNewVideo) {
+              saveAccountCacheToDb(item.account, cacheItem).catch(() => {});
+              cacheDirty = true;
+            }
+            const accKey = `${item.groupId}:${cleanAcc}`;
             warnedNotFoundAccounts.delete(accKey);
-            cacheDirty = true;
 
             // Check double upload (uploaded > 1 video today in WIB) - Push warning only 1x
             const todayVideos = (result.videos || []).filter(
@@ -229,7 +333,11 @@ export async function runPoll(isManual = false) {
     // Check task deadlines and reminders (10 min before deadline & at deadline)
     await checkTaskDeadlinesAndReminders(isManual);
 
-    addLog(`Scan selesai (${processedCount}/${totalAccounts} akun). Siklus berikutnya dalam ${intervalSeconds} detik.`, 'success');
+    if (totalAccounts > 0) {
+      addLog(`Scan selesai (${processedCount}/${totalAccounts} akun dipindai). Siklus berikutnya dalam ${intervalSeconds} detik.`, 'success');
+    } else {
+      addLog(`Status akun hari ini telah up-to-date (hemat bandwidth). Siklus berikutnya dalam ${intervalSeconds} detik.`, 'info');
+    }
   } catch (err) {
     console.error('[Main] Error pada siklus scan:', err.message);
     addLog(`Error siklus scan: ${err.message}`, 'error');

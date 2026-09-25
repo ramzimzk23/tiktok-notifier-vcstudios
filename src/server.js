@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { getTikTokUserVideos } from './scraper.js';
 import {
@@ -285,7 +286,9 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
     const pathname = url.pathname;
 
     const sendJson = (data, status = 200) => {
-      res.writeHead(status, {
+      const jsonStr = JSON.stringify(data);
+      const acceptEncoding = (req.headers['accept-encoding'] || '').toLowerCase();
+      const headers = {
         'Content-Type': 'application/json',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
@@ -294,8 +297,17 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-      });
-      res.end(JSON.stringify(data));
+      };
+
+      if (jsonStr.length > 512 && acceptEncoding.includes('gzip')) {
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+        res.writeHead(status, headers);
+        res.end(zlib.gzipSync(Buffer.from(jsonStr, 'utf-8')));
+      } else {
+        res.writeHead(status, headers);
+        res.end(jsonStr);
+      }
     };
 
     const parseBody = async () => {
@@ -1150,7 +1162,6 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         filePath = path.join(filePath, 'index.html');
       }
 
-      const content = await fs.readFile(filePath);
       const ext = path.extname(filePath);
       const mimeTypes = {
         '.html': 'text/html; charset=utf-8',
@@ -1159,15 +1170,39 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         '.json': 'application/json',
         '.png': 'image/png',
         '.jpg': 'image/jpeg',
-        '.svg': 'image/svg+xml'
+        '.svg': 'image/svg+xml',
+        '.ico': 'image/x-icon'
       };
 
-      res.writeHead(200, {
+      // 304 ETag Caching
+      const etag = `W/"${stat.size}-${Number(stat.mtimeMs)}"`;
+      const ifNoneMatch = req.headers['if-none-match'];
+      if (ifNoneMatch === etag) {
+        res.writeHead(304, { 'ETag': etag });
+        res.end();
+        return;
+      }
+
+      const content = await fs.readFile(filePath);
+      const acceptEncoding = (req.headers['accept-encoding'] || '').toLowerCase();
+      const headers = {
         'Content-Type': mimeTypes[ext] || 'application/octet-stream',
+        'ETag': etag,
+        'Cache-Control': ext === '.html' ? 'public, max-age=600, must-revalidate' : 'public, max-age=86400, stale-while-revalidate=3600',
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY'
-      });
-      res.end(content);
+      };
+
+      const compressible = ['.html', '.css', '.js', '.json', '.svg'].includes(ext);
+      if (compressible && content.length > 512 && acceptEncoding.includes('gzip')) {
+        headers['Content-Encoding'] = 'gzip';
+        headers['Vary'] = 'Accept-Encoding';
+        res.writeHead(200, headers);
+        res.end(zlib.gzipSync(content));
+      } else {
+        res.writeHead(200, headers);
+        res.end(content);
+      }
     } catch {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');

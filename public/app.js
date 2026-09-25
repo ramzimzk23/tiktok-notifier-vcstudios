@@ -111,9 +111,28 @@ function showDashboardView() {
   }
 
   fetchStatus();
-  if (!pollTimer) {
-    pollTimer = setInterval(fetchStatus, 3000);
+
+  // Smart Visibility Polling to conserve bandwidth (Render 5GB monthly limit):
+  // - 12s when actively viewing dashboard
+  // - 60s when tab is in background / minimized
+  // - Immediately re-fetches when user returns to tab
+  const ACTIVE_POLL_MS = 12000;
+  const HIDDEN_POLL_MS = 60000;
+
+  function updatePollInterval() {
+    if (pollTimer) clearInterval(pollTimer);
+    const delay = document.hidden ? HIDDEN_POLL_MS : ACTIVE_POLL_MS;
+    pollTimer = setInterval(fetchStatus, delay);
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      fetchStatus();
+    }
+    updatePollInterval();
+  });
+
+  updatePollInterval();
 }
 
 // Toast helper

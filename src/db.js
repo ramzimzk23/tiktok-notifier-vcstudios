@@ -381,12 +381,32 @@ export async function saveAccountCacheToDb(username, cacheData) {
   }
 }
 
+// --- In-Memory Config & State Caching (Render 5GB Bandwidth Conservation) ---
+let cachedFullConfig = null;
+let cachedConfigExpiry = 0;
+const CONFIG_CACHE_TTL_MS = 30000; // 30s cache avoids thousands of redundant Supabase queries
+
+let cachedAccountStates = null;
+let cachedStatesExpiry = 0;
+const STATES_CACHE_TTL_MS = 25000; // 25s cache for account state checks
+
+export function invalidateConfigCache() {
+  cachedFullConfig = null;
+  cachedConfigExpiry = 0;
+  cachedAccountStates = null;
+  cachedStatesExpiry = 0;
+}
+
 // --- Unified Database Interface ---
 
 /**
- * Load full application config & groups
+ * Load full application config & groups (Cached in-memory for 30s)
  */
-export async function getFullConfig() {
+export async function getFullConfig(forceRefresh = false) {
+  if (!forceRefresh && cachedFullConfig && Date.now() < cachedConfigExpiry) {
+    return cachedFullConfig;
+  }
+
   if (isSupabaseActive && supabaseClient) {
     try {
       // 1. Fetch settings
@@ -494,13 +514,18 @@ export async function getFullConfig() {
       // Keep local file updated as fallback cache
       writeLocalConfig(fullConfig).catch(() => {});
 
+      cachedFullConfig = fullConfig;
+      cachedConfigExpiry = Date.now() + CONFIG_CACHE_TTL_MS;
       return fullConfig;
     } catch (err) {
       console.error('[DB] Gagal membaca dari Supabase, beralih ke cache lokal:', err.message);
     }
   }
 
-  return await readLocalConfig();
+  const localFallback = await readLocalConfig();
+  cachedFullConfig = localFallback;
+  cachedConfigExpiry = Date.now() + CONFIG_CACHE_TTL_MS;
+  return localFallback;
 }
 
 /**
@@ -527,6 +552,7 @@ export async function saveSettings(intervalSeconds, delayMs, appUrl = undefined)
   if (delayMs) local.delayBetweenAccountsMs = delayMs;
   if (appUrl !== undefined) local.appUrl = appUrl;
   await writeLocalConfig(local);
+  invalidateConfigCache();
 }
 
 /**
@@ -591,6 +617,7 @@ export async function upsertGroup(group) {
     local.groups.push({ ...groupObj, accounts: groupObj.accounts || [] });
   }
   await writeLocalConfig(local);
+  invalidateConfigCache();
 }
 
 /**
@@ -608,6 +635,7 @@ export async function removeGroup(groupId) {
   const local = await readLocalConfig();
   local.groups = local.groups.filter((g) => g.id !== groupId);
   await writeLocalConfig(local);
+  invalidateConfigCache();
 }
 
 /**
@@ -652,6 +680,7 @@ export async function addAccountToGroup(groupId, username, user = null, latestVi
     };
     await writeLocalState(state);
   }
+  invalidateConfigCache();
 }
 
 /**
@@ -712,6 +741,7 @@ export async function addAccountsBatchToGroup(groupId, rawList) {
       }
       await writeLocalConfig(local);
     }
+    invalidateConfigCache();
   }
 
   return { added: toAdd, skipped };
@@ -745,6 +775,7 @@ export async function removeAccountFromGroup(groupId, username) {
   const state = await readLocalState();
   delete state[cleanUser];
   await writeLocalState(state);
+  invalidateConfigCache();
 }
 
 /**
@@ -804,14 +835,19 @@ export async function editAccountInGroup(groupId, oldUsername, newUsername, newU
     };
   }
   await writeLocalState(state);
+  invalidateConfigCache();
 
   return { cleanOld, cleanNew };
 }
 
 /**
- * Get state for accounts (last known video IDs)
+ * Get state for accounts (last known video IDs, cached 25s)
  */
-export async function getAccountStates() {
+export async function getAccountStates(forceRefresh = false) {
+  if (!forceRefresh && cachedAccountStates && Date.now() < cachedStatesExpiry) {
+    return cachedAccountStates;
+  }
+
   if (isSupabaseActive && supabaseClient) {
     try {
       const { data, error } = await supabaseClient
@@ -836,6 +872,8 @@ export async function getAccountStates() {
             lastCheckTime: row.last_check_time
           };
         }
+        cachedAccountStates = stateMap;
+        cachedStatesExpiry = Date.now() + STATES_CACHE_TTL_MS;
         return stateMap;
       }
     } catch (err) {
@@ -843,7 +881,10 @@ export async function getAccountStates() {
     }
   }
 
-  return await readLocalState();
+  const localState = await readLocalState();
+  cachedAccountStates = localState;
+  cachedStatesExpiry = Date.now() + STATES_CACHE_TTL_MS;
+  return localState;
 }
 
 /**
@@ -851,6 +892,15 @@ export async function getAccountStates() {
  */
 export async function updateAccountState(username, videoId, postTime) {
   const cleanUser = username.replace(/^@/, '').toLowerCase();
+
+  if (cachedAccountStates) {
+    cachedAccountStates[cleanUser] = {
+      ...(cachedAccountStates[cleanUser] || {}),
+      lastVideoId: videoId,
+      lastPostTime: postTime,
+      lastCheckTime: Date.now()
+    };
+  }
 
   if (isSupabaseActive && supabaseClient) {
     try {
