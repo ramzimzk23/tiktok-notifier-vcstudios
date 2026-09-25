@@ -91,65 +91,70 @@
             <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.33 6.33 0 0 0-1-.08A6.34 6.34 0 0 0 3 15.66a6.34 6.34 0 0 0 10.83 4.46 6.3 6.3 0 0 0 1.86-4.48V8.71a8.28 8.28 0 0 0 4.9 1.59v-3.61a4.92 4.92 0 0 1-1-.001Z"/>
           </svg>
         </div>
-        <div>
+        <div class="brand-text">
           <h1 class="brand-title">VCStudios</h1>
-          <p class="brand-sub">TikTok Monitor • Multi-Group Discord Alerts</p>
+          <p class="brand-sub">TikTok Monitor</p>
         </div>
       </div>
 
       <div class="nav-actions">
-        <div class="db-chip" id="db-status">
-          <span class="db-dot"></span>
-          <span id="db-status-text">Lokal</span>
+        <div class="nav-status-group">
+          <div class="db-chip" id="db-status" title="Status Database">
+            <span class="db-dot"></span>
+            <span id="db-status-text">Lokal</span>
+          </div>
+          <div class="status-chip" id="poller-status" title="Status Poller">
+            <span class="status-pulse"></span>
+            <span class="status-text">Poller Aktif</span>
+          </div>
+          <div class="countdown-chip" title="Waktu hitung mundur scan berikutnya">
+            <span class="chip-label">Scan:</span>
+            <span class="countdown-timer" id="countdown-val">--:--</span>
+          </div>
         </div>
-        <div class="status-chip" id="poller-status">
-          <span class="status-pulse"></span>
-          <span class="status-text">Poller Aktif</span>
+
+        <div class="nav-actions-group">
+          <button class="btn btn-primary btn-sm" id="btn-manual-check" title="Pindai sekarang semua akun">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Scan Semua</span>
+          </button>
+          <button class="btn btn-glass btn-sm btn-icon" id="btn-open-settings" title="Pengaturan Global">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <div class="user-chip" id="nav-user-chip">
+            <span class="user-ico">👤</span>
+            <span id="nav-username" class="nav-user-text">...</span>
+            <span id="nav-role-badge" class="group-badge">...</span>
+          </div>
+          <button class="btn btn-glass btn-sm btn-icon btn-danger-hover" id="btn-logout" title="Keluar / Logout">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
         </div>
-        <div class="countdown-chip">
-          <span class="chip-label">Scan berikutnya:</span>
-          <span class="countdown-timer" id="countdown-val">--:--</span>
-        </div>
-        <button class="btn btn-primary" id="btn-manual-check">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-          </svg>
-          Scan Semua
-        </button>
-        <button class="btn btn-glass" id="btn-open-settings" title="Pengaturan Global">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
-        <div class="user-chip" id="nav-user-chip" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 0.78rem;">
-          <span style="color: var(--text-muted);">Akun:</span>
-          <span id="nav-username" style="color: #fff; font-weight: 600;">...</span>
-          <span id="nav-role-badge" class="group-badge" style="background: rgba(37,244,238,0.15); border-color: rgba(37,244,238,0.4); color: var(--tiktok-cyan); font-size: 0.7rem;">...</span>
-        </div>
-        <button class="btn btn-glass btn-danger-hover" id="btn-logout" title="Keluar / Logout">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-        </button>
       </div>
     </header>
 
-    <!-- Metrics Bar -->
+    <!-- Metrics Bar (Compact Stat Grid) -->
     <div class="metrics-grid">
       <div class="metric-card">
         <div class="metric-icon icon-cyan">📁</div>
         <div class="metric-content">
-          <span class="metric-label">Total Grup Channel</span>
+          <span class="metric-label">Grup Channel</span>
           <span class="metric-val" id="metric-groups-count">1</span>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-icon icon-pink">🎯</div>
         <div class="metric-content">
-          <span class="metric-label">Total Akun Dipantau</span>
+          <span class="metric-label">Akun Dipantau</span>
           <span class="metric-val" id="metric-accounts-count">1</span>
         </div>
       </div>
@@ -167,6 +172,7 @@
           <span class="metric-val" id="metric-delay">2.0s</span>
         </div>
       </div>
+    </div>
     <!-- Main View Switcher Tabs -->
     <div class="view-nav-bar" id="view-nav-bar">
       <button type="button" class="view-nav-btn active" id="tab-btn-report" onclick="switchMainView('report')">
@@ -232,13 +238,13 @@
               <h3 class="daily-report-heading">Target Kuota: <span id="report-target-text">1 Video di 14 Akun = Selesai</span></h3>
               <p class="daily-report-sub">Sistem secara otomatis menghitung akun unik yang mengunggah minimal 1 video hari ini.</p>
             </div>
-            <div class="daily-report-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="daily-report-actions">
               <button type="button" class="btn btn-outline btn-sm" id="btn-copy-public-link" style="border-color: var(--tiktok-cyan); color: var(--tiktok-cyan);" title="Salin tautan laporan publik yang bisa dilihat siapa saja tanpa login">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                 </svg>
-                <span>🔗 Salin Link Publik (Tanpa Login)</span>
+                <span>Salin Link</span>
               </button>
               <a href="/report" target="_blank" class="btn btn-glass btn-sm" id="btn-open-public-link" title="Buka halaman laporan publik di tab baru">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
