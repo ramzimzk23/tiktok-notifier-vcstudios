@@ -1,6 +1,6 @@
 import { getTikTokUserVideos } from './scraper.js';
 import { sendDiscordNotification } from './notifier.js';
-import { getAccountStates, updateAccountState, hasVideoBeenSent, markVideoAsSent } from './db.js';
+import { getAccountStates, updateAccountState, hasVideoBeenSent, markVideoAsSent, getAccountDailyBaseline } from './db.js';
 
 /**
  * Check an individual TikTok account for new or un-notified videos.
@@ -26,19 +26,37 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
     return result;
   }
 
-  const { user, videos } = result;
-
-  if (!videos || videos.length === 0) {
-    if (result.fromDirectProfile) {
-      return result;
-    }
-    console.log(`[Tracker] Tidak ada video ditemukan untuk @${cleanUser}`);
-    return result;
-  }
+  const { user, videoCount } = result;
+  let videos = Array.isArray(result.videos) ? [...result.videos] : [];
 
   // Get current WIB day start timestamp
   const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
   const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
+
+  // If embed returned 0 videos (e.g. 503 overload-protect on Render) but direct profile returned live videoCount:
+  if (videos.length === 0 && videoCount !== undefined) {
+    const baseline = await getAccountDailyBaseline(cleanUser, nowWIB, videoCount);
+    const newUploadsCount = Math.max(0, videoCount - baseline);
+
+    if (newUploadsCount > 0) {
+      for (let i = 1; i <= newUploadsCount; i++) {
+        videos.push({
+          id: `upload_${cleanUser}_${nowWIB}_${i}`,
+          desc: `Postingan TikTok baru terdeteksi (Total: ${videoCount} video)`,
+          cover: user?.avatar || '',
+          authorUniqueId: cleanUser,
+          url: `https://www.tiktok.com/@${cleanUser}`,
+          createTime: Math.max(startOfDayWIB + 3600, Math.floor(Date.now() / 1000)),
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  if (!videos || videos.length === 0) {
+    console.log(`[Tracker] Tidak ada video baru ditemukan untuk @${cleanUser}`);
+    return { ...result, videos: [] };
+  }
 
   const states = await getAccountStates();
   const accountState = states[cleanUser];

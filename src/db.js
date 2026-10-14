@@ -232,6 +232,76 @@ export async function markGroupCompletedToday(groupKey) {
   }
 }
 
+const BASELINES_FILE = path.resolve(__dirname, '../daily_baselines.json');
+let dailyBaselines = null;
+
+// Initial known baselines for today (2026-10-14 WIB) so existing uploads are counted
+const SEED_BASELINES_TODAY = {
+  'bila67696': 14,
+  'afifahhgstn': 5,
+  'bagassaptra5': 16,
+  'ichaaasecret': 15,
+  'andri.budianto75': 9,
+  'sashfira.abigail': 18
+};
+
+export async function loadDailyBaselines() {
+  if (dailyBaselines) return dailyBaselines;
+  try {
+    const raw = await fs.readFile(BASELINES_FILE, 'utf-8');
+    dailyBaselines = JSON.parse(raw);
+  } catch {
+    dailyBaselines = {};
+  }
+  return dailyBaselines;
+}
+
+export async function saveDailyBaselines() {
+  if (!dailyBaselines) return;
+  try {
+    await fs.writeFile(BASELINES_FILE, JSON.stringify(dailyBaselines, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[DB] Gagal menyimpan daily_baselines:', err.message);
+  }
+}
+
+export async function getAccountDailyBaseline(username, dateWIB, liveVideoCount) {
+  const baselines = await loadDailyBaselines();
+  const cleanUser = (username || '').replace(/^@/, '').toLowerCase();
+  if (!cleanUser) return liveVideoCount || 0;
+
+  if (!baselines[cleanUser]) {
+    baselines[cleanUser] = {};
+  }
+
+  const userDates = baselines[cleanUser];
+
+  // If already established for this specific date
+  if (userDates[dateWIB] !== undefined) {
+    return userDates[dateWIB];
+  }
+
+  // Check seed baselines for 2026-10-14
+  if (dateWIB === '2026-10-14' && SEED_BASELINES_TODAY[cleanUser] !== undefined) {
+    userDates[dateWIB] = SEED_BASELINES_TODAY[cleanUser];
+    await saveDailyBaselines();
+    return userDates[dateWIB];
+  }
+
+  // If new day, check if we recorded count from previous days
+  const pastDates = Object.keys(userDates).sort();
+  if (pastDates.length > 0) {
+    const lastDate = pastDates[pastDates.length - 1];
+    userDates[dateWIB] = userDates[lastDate];
+  } else {
+    // First encounter ever: baseline is current count (0 uploads so far today)
+    userDates[dateWIB] = liveVideoCount !== undefined ? liveVideoCount : 0;
+  }
+
+  await saveDailyBaselines();
+  return userDates[dateWIB];
+}
+
 /**
  * Pre-populate sent_videos with existing cached videos so historical videos are never alerted as new.
  * IMPORTANT: Only videos that are explicitly marked as webhookSent === true OR uploaded BEFORE today (WIB)

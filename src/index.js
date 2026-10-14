@@ -153,7 +153,7 @@ export async function runPoll(isManual = false) {
       for (const a of g.accounts || []) {
         const c = runtimeState.accountCache[a.toLowerCase()];
         const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
-        if (cv.some((v) => v && v.id && !v.id.startsWith('profile_') && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB)) {
+        if (cv.some((v) => v && v.id && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB)) {
           upCount++;
         }
       }
@@ -185,7 +185,7 @@ export async function runPoll(isManual = false) {
         const c = runtimeState.accountCache[cleanUser];
         const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
         const hasUploadedToday = cv.some(
-          (v) => v && v.id && !v.id.startsWith('profile_') && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+          (v) => v && v.id && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
         );
 
         let shouldScan = false;
@@ -251,11 +251,14 @@ export async function runPoll(isManual = false) {
             const cleanAcc = item.account.toLowerCase();
             const existingCache = runtimeState.accountCache[cleanAcc];
 
-            // Only accept authentic videos with real TikTok snowflake IDs and real timestamps
-            const authenticVideos = (result.videos || []).filter((v) => v && v.id && !v.id.startsWith('profile_'));
-            const existingAuthenticVideos = (existingCache?.recentVideos || []).filter((v) => v && v.id && !v.id.startsWith('profile_'));
+            // Accept all valid videos returned by tracker (including today's baseline-tracked uploads)
+            const authenticVideos = (result.videos || []).filter((v) => v && v.id);
+            const existingAuthenticVideos = (existingCache?.recentVideos || []).filter((v) => v && v.id);
 
-            const finalVideos = authenticVideos.length > 0 ? authenticVideos : existingAuthenticVideos;
+            // Merge today's new videos with existing historical videos without duplicating
+            const finalVideos = authenticVideos.length > 0
+              ? [...authenticVideos, ...existingAuthenticVideos.filter((ev) => !authenticVideos.some((av) => av.id === ev.id))]
+              : existingAuthenticVideos;
             const newLatestId = finalVideos[0]?.id || null;
             const oldLatestId = existingAuthenticVideos[0]?.id || null;
             const hasNewVideo = newLatestId && newLatestId !== oldLatestId;
