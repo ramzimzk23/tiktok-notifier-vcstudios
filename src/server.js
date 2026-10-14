@@ -534,22 +534,37 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
         results.scraperError = e.message;
       }
 
-      try {
-        const res = await fetch(`https://www.tiktok.com/embed/@${cleanUser}?refer=creator_embed`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Referer': 'https://www.tiktok.com/'
-          }
-        });
-        results.rawEmbedStatus = res.status;
-        const text = await res.text();
-        results.rawEmbedLength = text.length;
-        results.rawEmbedSnippet = text.slice(0, 300);
-        results.hasFrontity = text.includes('__FRONTITY_CONNECT_STATE__');
-        results.hasWaf = text.includes('class="_wafchallengeid"');
-        results.hasOverload = text.includes('overload-protect');
-      } catch (e) {
-        results.rawEmbedError = e.message;
+      // Test multiple alternative endpoints from Render
+      const tests = [
+        { name: 'm_tiktok_embed', url: `https://m.tiktok.com/embed/@${cleanUser}` },
+        { name: 'oembed', url: `https://www.tiktok.com/oembed?url=https://www.tiktok.com/@${cleanUser}` },
+        { name: 'embed_v2', url: `https://www.tiktok.com/embed/v2/@${cleanUser}` },
+        { name: 'mobile_web', url: `https://m.tiktok.com/v/@${cleanUser}.html` },
+        { name: 'share_user', url: `https://www.tiktok.com/node/share/user/@${cleanUser}` }
+      ];
+
+      results.endpointTests = [];
+      for (const t of tests) {
+        try {
+          const res = await fetch(t.url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+              'Referer': 'https://www.tiktok.com/'
+            },
+            signal: AbortSignal.timeout(6000)
+          });
+          const text = await res.text();
+          results.endpointTests.push({
+            name: t.name,
+            status: res.status,
+            length: text.length,
+            hasFrontity: text.includes('__FRONTITY_CONNECT_STATE__'),
+            hasUniversal: text.includes('__UNIVERSAL_DATA_FOR_REHYDRATION__'),
+            snippet: text.slice(0, 150)
+          });
+        } catch (e) {
+          results.endpointTests.push({ name: t.name, error: e.message });
+        }
       }
 
       sendJson(results);
