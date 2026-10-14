@@ -521,6 +521,41 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
       return;
     }
 
+    // DEBUG ENDPOINT: /api/debug-fetch?user=...
+    if (pathname === '/api/debug-fetch' && req.method === 'GET') {
+      const debugUser = url.searchParams.get('user') || 'bila67696';
+      const cleanUser = debugUser.replace(/^@/, '').trim();
+      const results = {};
+
+      try {
+        const { getTikTokUserVideos } = await import('./scraper.js');
+        results.scraperResult = await getTikTokUserVideos(cleanUser, 1);
+      } catch (e) {
+        results.scraperError = e.message;
+      }
+
+      try {
+        const res = await fetch(`https://www.tiktok.com/embed/@${cleanUser}?refer=creator_embed`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+            'Referer': 'https://www.tiktok.com/'
+          }
+        });
+        results.rawEmbedStatus = res.status;
+        const text = await res.text();
+        results.rawEmbedLength = text.length;
+        results.rawEmbedSnippet = text.slice(0, 300);
+        results.hasFrontity = text.includes('__FRONTITY_CONNECT_STATE__');
+        results.hasWaf = text.includes('class="_wafchallengeid"');
+        results.hasOverload = text.includes('overload-protect');
+      } catch (e) {
+        results.rawEmbedError = e.message;
+      }
+
+      sendJson(results);
+      return;
+    }
+
     // 3. POST /api/test-webhook
     if (pathname === '/api/test-webhook' && req.method === 'POST') {
       try {
