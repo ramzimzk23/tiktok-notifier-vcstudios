@@ -31,34 +31,77 @@ const USER_AGENTS = [
 ];
 
 /**
- * Fetch TikTok user data and recent videos via embed state
+ * Fetch direct TikTok profile via WAF challenge solver (Layer 2 Fallback)
+ * @param {string} cleanUser Clean username without @
+ */
+export async function getDirectTikTokProfile(cleanUser) {
+  const targetUrl = `https://www.tiktok.com/@${cleanUser}`;
+  const headers = {
+    'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)],
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9,id;q=0.8'
+  };
+
+  try {
+    let res = await fetch(targetUrl, { headers, signal: AbortSignal.timeout(9000) });
+    let html = await res.text();
+
+    if (html.includes('class="_wafchallengeid"')) {
+      const csMatch = html.match(/<p id="cs" class="([^"]+)"/);
+      if (csMatch && csMatch[1]) {
+        const solvedCookie = solveWafChallenge(csMatch[1]);
+        res = await fetch(targetUrl, {
+          headers: {
+            ...headers,
+            'Cookie': `_wafchallengeid=${solvedCookie};`
+          },
+          signal: AbortSignal.timeout(9000)
+        });
+        html = await res.text();
+      }
+    }
+
+    const match = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!match || !match[1]) {
+      return { success: false, error: 'Could not extract profile data' };
+    }
+
+    const data = JSON.parse(match[1]);
+    const userDetail = data['__DEFAULT_SCOPE__']?.['webapp.user-detail'];
+    if (!userDetail || userDetail.isError || userDetail.statusCode === 10221) {
+      return { success: false, isNotFound: true, error: `Username TikTok @${cleanUser} tidak ditemukan.` };
+    }
+
+    const user = userDetail.userInfo?.user || {};
+    const stats = userDetail.userInfo?.stats || {};
+
+    return {
+      success: true,
+      fromDirectProfile: true,
+      videoCount: stats.videoCount || 0,
+      user: {
+        nickname: user.nickname || cleanUser,
+        uniqueId: user.uniqueId || cleanUser,
+        avatar: user.avatarThumb || user.avatarMedium || '',
+        signature: user.signature || ''
+      },
+      videos: []
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch TikTok user data and recent videos via embed state with direct profile fallback
  * @param {string} username TikTok username (with or without @)
  * @param {number} maxRetries Maximum retry attempts on transient block
- * @returns {Promise<{
- *   success: boolean,
- *   user?: {
- *     nickname: string,
- *     uniqueId: string,
- *     avatar: string,
- *     signature: string
- *   },
- *   videos?: Array<{
- *     id: string,
- *     desc: string,
- *     cover: string,
- *     authorUniqueId: string,
- *     url: string,
- *     createTime: number,
- *     createdAt: string
- *   }>,
- *   error?: string
- * }>}
  */
-export async function getTikTokUserVideos(username, maxRetries = 3) {
+export async function getTikTokUserVideos(username, maxRetries = 2) {
   const cleanUser = username.replace(/^@/, '').trim();
   const handle = `@${cleanUser}`;
   const path = `/embed/${handle}`;
-  const targetUrl = `https://www.tiktok.com${path}`;
+  const targetUrl = `https://www.tiktok.com${path}?refer=creator_embed`;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const ua = USER_AGENTS[(attempt + Math.floor(Math.random() * USER_AGENTS.length)) % USER_AGENTS.length];
@@ -67,7 +110,7 @@ export async function getTikTokUserVideos(username, maxRetries = 3) {
       'Accept':
         'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
-      'Referer': `https://www.tiktok.com/@${cleanUser}`,
+      'Referer': 'https://www.tiktok.com/',
       'Sec-Fetch-Dest': 'iframe',
       'Sec-Fetch-Mode': 'navigate',
       'Sec-Fetch-Site': 'cross-site'
@@ -76,7 +119,7 @@ export async function getTikTokUserVideos(username, maxRetries = 3) {
     try {
       if (attempt > 0) {
         // Exponential backoff with random jitter to clear TikTok overload-protect
-        const backoffMs = 2000 * attempt + Math.floor(Math.random() * 1500);
+        const backoffMs = 2500 * attempt + Math.floor(Math.random() * 1500);
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
@@ -89,6 +132,11 @@ export async function getTikTokUserVideos(username, maxRetries = 3) {
       // Check if TikTok Envoy overload protect or 429 was triggered
       if (res.status === 503 || res.status === 429 || html.includes('overload-protect')) {
         if (attempt < maxRetries) continue;
+        // Fallback to Layer 2 Direct Profile WAF
+        const direct = await getDirectTikTokProfile(cleanUser);
+        if (direct.success) {
+          return direct;
+        }
         return {
           success: false,
           error: `TikTok overload-protect / rate limit triggered for @${cleanUser}. (Status: ${res.status})`
@@ -117,6 +165,11 @@ export async function getTikTokUserVideos(username, maxRetries = 3) {
 
       if (!match || !match[1]) {
         if (attempt < maxRetries) continue;
+        // Fallback to Layer 2 Direct Profile WAF
+        const direct = await getDirectTikTokProfile(cleanUser);
+        if (direct.success) {
+          return direct;
+        }
         return {
           success: false,
           error: `Could not find __FRONTITY_CONNECT_STATE__ for @${cleanUser}. (Status: ${res.status})`
@@ -165,6 +218,11 @@ export async function getTikTokUserVideos(username, maxRetries = 3) {
       };
     } catch (err) {
       if (attempt < maxRetries) continue;
+      // Fallback to Layer 2 Direct Profile WAF
+      const direct = await getDirectTikTokProfile(cleanUser);
+      if (direct.success) {
+        return direct;
+      }
       return {
         success: false,
         error: err.message

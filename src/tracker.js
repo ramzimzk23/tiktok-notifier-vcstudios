@@ -29,6 +29,9 @@ export async function checkAccount(username, webhookUrl, groupName = null, notif
   const { user, videos } = result;
 
   if (!videos || videos.length === 0) {
+    if (result.fromDirectProfile) {
+      return result;
+    }
     console.log(`[Tracker] Tidak ada video ditemukan untuk @${cleanUser}`);
     return result;
   }

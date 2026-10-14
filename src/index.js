@@ -125,7 +125,7 @@ export async function runPoll(isManual = false) {
 
   try {
     const config = await getFullConfig();
-    const delayBetweenBatchesMs = Math.max(800, config.delayBetweenAccountsMs || 1200);
+    const delayBetweenBatchesMs = Math.max(2500, config.delayBetweenAccountsMs || 3000);
     const groups = config.groups || [];
 
     const startOfDayWIB = Math.floor(new Date(`${dateWIB}T00:00:00+07:00`).getTime() / 1000);
@@ -250,16 +250,42 @@ export async function runPoll(isManual = false) {
           if (result && result.success && result.user) {
             const cleanAcc = item.account.toLowerCase();
             const existingCache = runtimeState.accountCache[cleanAcc];
-            const newLatestId = result.videos?.[0]?.id || null;
+            const liveVideoCount = result.videoCount || result.videos?.length || 0;
+            const prevVideoCount = existingCache?.videoCount || existingCache?.recentVideos?.length || 0;
+            const hasCountIncrease = liveVideoCount > prevVideoCount && prevVideoCount > 0;
+
+            let finalVideos = result.videos || [];
+            if (result.fromDirectProfile) {
+              if (hasCountIncrease) {
+                // New video detected via live TikTok profile videoCount!
+                const syntheticVideo = {
+                  id: `profile_${cleanAcc}_${liveVideoCount}`,
+                  desc: `Video TikTok baru terdeteksi (@${cleanAcc})`,
+                  cover: result.user.avatar || '',
+                  authorUniqueId: cleanAcc,
+                  url: `https://www.tiktok.com/@${cleanAcc}`,
+                  createTime: Math.floor(Date.now() / 1000),
+                  createdAt: new Date().toISOString(),
+                  webhookSent: true
+                };
+                finalVideos = [syntheticVideo, ...(existingCache?.recentVideos || [])];
+                addLog(`🔔 Terdeteksi upload baru via profil untuk @${cleanAcc} (${prevVideoCount} ➔ ${liveVideoCount} video)`, 'info');
+              } else {
+                finalVideos = existingCache?.recentVideos || [];
+              }
+            }
+
+            const newLatestId = finalVideos[0]?.id || null;
             const oldLatestId = existingCache?.latestVideo?.id || existingCache?.recentVideos?.[0]?.id || null;
-            const hasNewVideo = newLatestId && newLatestId !== oldLatestId;
+            const hasNewVideo = (newLatestId && newLatestId !== oldLatestId) || hasCountIncrease;
 
             const cacheItem = {
               user: result.user,
               groupId: item.groupId,
               groupName: item.groupName,
-              latestVideo: result.videos?.[0] || null,
-              recentVideos: (result.videos || []).map((v) => ({
+              videoCount: liveVideoCount || prevVideoCount,
+              latestVideo: finalVideos[0] || existingCache?.latestVideo || null,
+              recentVideos: finalVideos.map((v) => ({
                 id: v.id,
                 createTime: v.createTime,
                 desc: v.desc || '',
@@ -280,7 +306,7 @@ export async function runPoll(isManual = false) {
             warnedNotFoundAccounts.delete(accKey);
 
             // Check double upload (uploaded > 1 video today in WIB) - Push warning only 1x
-            const todayVideos = (result.videos || []).filter(
+            const todayVideos = finalVideos.filter(
               (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
             );
             if (todayVideos.length > 1) {
