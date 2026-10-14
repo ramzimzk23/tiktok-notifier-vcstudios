@@ -101,9 +101,9 @@ export function generateDailyReportData(group, accountCache = {}, offsetDays = 0
     const cached = accountCache[acc];
     const videos = cached?.recentVideos || (cached?.latestVideo ? [cached.latestVideo] : []);
 
-    // Filter videos created on this date in WIB
+    // Filter authentic videos created on this date in WIB
     const targetVideos = videos.filter(
-      (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+      (v) => v && v.id && !v.id.startsWith('profile_') && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
     );
 
     if (targetVideos.length > 0) {

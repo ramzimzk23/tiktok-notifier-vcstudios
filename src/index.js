@@ -153,7 +153,7 @@ export async function runPoll(isManual = false) {
       for (const a of g.accounts || []) {
         const c = runtimeState.accountCache[a.toLowerCase()];
         const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
-        if (cv.some((v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB)) {
+        if (cv.some((v) => v && v.id && !v.id.startsWith('profile_') && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB)) {
           upCount++;
         }
       }
@@ -185,7 +185,7 @@ export async function runPoll(isManual = false) {
         const c = runtimeState.accountCache[cleanUser];
         const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
         const hasUploadedToday = cv.some(
-          (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+          (v) => v && v.id && !v.id.startsWith('profile_') && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
         );
 
         let shouldScan = false;
@@ -250,47 +250,28 @@ export async function runPoll(isManual = false) {
           if (result && result.success && result.user) {
             const cleanAcc = item.account.toLowerCase();
             const existingCache = runtimeState.accountCache[cleanAcc];
-            const liveVideoCount = result.videoCount || result.videos?.length || 0;
-            const prevVideoCount = existingCache?.videoCount || existingCache?.recentVideos?.length || 0;
-            const hasCountIncrease = liveVideoCount > prevVideoCount && prevVideoCount > 0;
 
-            let finalVideos = result.videos || [];
-            if (result.fromDirectProfile) {
-              if (hasCountIncrease) {
-                // New video detected via live TikTok profile videoCount!
-                const syntheticVideo = {
-                  id: `profile_${cleanAcc}_${liveVideoCount}`,
-                  desc: `Video TikTok baru terdeteksi (@${cleanAcc})`,
-                  cover: result.user.avatar || '',
-                  authorUniqueId: cleanAcc,
-                  url: `https://www.tiktok.com/@${cleanAcc}`,
-                  createTime: Math.floor(Date.now() / 1000),
-                  createdAt: new Date().toISOString(),
-                  webhookSent: true
-                };
-                finalVideos = [syntheticVideo, ...(existingCache?.recentVideos || [])];
-                addLog(`🔔 Terdeteksi upload baru via profil untuk @${cleanAcc} (${prevVideoCount} ➔ ${liveVideoCount} video)`, 'info');
-              } else {
-                finalVideos = existingCache?.recentVideos || [];
-              }
-            }
+            // Only accept authentic videos with real TikTok snowflake IDs and real timestamps
+            const authenticVideos = (result.videos || []).filter((v) => v && v.id && !v.id.startsWith('profile_'));
+            const existingAuthenticVideos = (existingCache?.recentVideos || []).filter((v) => v && v.id && !v.id.startsWith('profile_'));
 
+            const finalVideos = authenticVideos.length > 0 ? authenticVideos : existingAuthenticVideos;
             const newLatestId = finalVideos[0]?.id || null;
-            const oldLatestId = existingCache?.latestVideo?.id || existingCache?.recentVideos?.[0]?.id || null;
-            const hasNewVideo = (newLatestId && newLatestId !== oldLatestId) || hasCountIncrease;
+            const oldLatestId = existingAuthenticVideos[0]?.id || null;
+            const hasNewVideo = newLatestId && newLatestId !== oldLatestId;
 
             const cacheItem = {
               user: result.user,
               groupId: item.groupId,
               groupName: item.groupName,
-              videoCount: liveVideoCount || prevVideoCount,
-              latestVideo: finalVideos[0] || existingCache?.latestVideo || null,
+              videoCount: result.videoCount || finalVideos.length,
+              latestVideo: finalVideos[0] || null,
               recentVideos: finalVideos.map((v) => ({
                 id: v.id,
                 createTime: v.createTime,
                 desc: v.desc || '',
                 url: v.url,
-                webhookSent: v.webhookSent === true || (existingCache?.recentVideos?.find((x) => x.id === v.id)?.webhookSent === true)
+                webhookSent: v.webhookSent === true || (existingAuthenticVideos.find((x) => x.id === v.id)?.webhookSent === true)
               })),
               lastUpdated: Date.now()
             };
