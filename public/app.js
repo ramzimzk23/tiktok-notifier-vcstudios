@@ -221,6 +221,25 @@ function renderDashboard(data) {
     dbChip.title = 'Data disimpan di file lokal. Klik Pengaturan untuk menghubungkan Supabase.';
   }
 
+  // Update Poller Status Chip
+  const pollerChip = document.getElementById('poller-status');
+  if (pollerChip) {
+    const textEl = pollerChip.querySelector('.status-text');
+    if (runtime.isSleeping) {
+      pollerChip.classList.add('sleeping');
+      pollerChip.title = 'Bot dalam jadwal istirahat (01:00 - 09:00 WIB). Mulai scan otomatis pukul 09:00 WIB.';
+      if (textEl) textEl.textContent = 'Istirahat (s/d 09:00)';
+    } else if (runtime.isScanning) {
+      pollerChip.classList.remove('sleeping');
+      pollerChip.title = 'Sedang memindai akun TikTok...';
+      if (textEl) textEl.textContent = 'Memindai...';
+    } else {
+      pollerChip.classList.remove('sleeping');
+      pollerChip.title = 'Poller Aktif (09:00 - 01:00 WIB)';
+      if (textEl) textEl.textContent = 'Poller Aktif';
+    }
+  }
+
   // Update Countdown / Scanning status
   const countdownEl = document.getElementById('countdown-val');
   const btnManual = document.getElementById('btn-manual-check');
@@ -277,10 +296,17 @@ function renderDashboard(data) {
 
 function updateCountdownDisplay() {
   if (currentStatus?.runtime?.isScanning) return;
-  const mins = Math.floor(countdownSeconds / 60).toString().padStart(2, '0');
+  const hours = Math.floor(countdownSeconds / 3600);
+  const mins = Math.floor((countdownSeconds % 3600) / 60).toString().padStart(2, '0');
   const secs = (countdownSeconds % 60).toString().padStart(2, '0');
   const el = document.getElementById('countdown-val');
-  if (el) el.textContent = `${mins}:${secs}`;
+  if (el) {
+    if (hours > 0) {
+      el.textContent = `${hours}j ${mins}m ${secs}d`;
+    } else {
+      el.textContent = `${mins}:${secs}`;
+    }
+  }
 }
 
 setInterval(() => {

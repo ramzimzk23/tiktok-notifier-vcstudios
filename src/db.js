@@ -204,6 +204,34 @@ export async function markVideoAsSent(username, videoId) {
   }
 }
 
+const COMPLETED_GROUPS_FILE = path.resolve(__dirname, '../sent_completed_groups.json');
+
+/**
+ * Load persistent record of groups that already completed their quota today
+ */
+export async function loadSentCompletedGroups() {
+  try {
+    const raw = await fs.readFile(COMPLETED_GROUPS_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? new Set(data) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Mark a group as completed today to prevent duplicate completed webhooks across server restarts
+ */
+export async function markGroupCompletedToday(groupKey) {
+  try {
+    const set = await loadSentCompletedGroups();
+    set.add(groupKey);
+    await fs.writeFile(COMPLETED_GROUPS_FILE, JSON.stringify(Array.from(set), null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[DB] Gagal menyimpan sent_completed_groups:', err.message);
+  }
+}
+
 /**
  * Pre-populate sent_videos with existing cached videos so historical videos are never alerted as new.
  * IMPORTANT: Only videos that are explicitly marked as webhookSent === true OR uploaded BEFORE today (WIB)

@@ -23,9 +23,17 @@ export function solveWafChallenge(cs) {
   return Buffer.from(JSON.stringify(c)).toString('base64');
 }
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0'
+];
+
 /**
  * Fetch TikTok user data and recent videos via embed state
  * @param {string} username TikTok username (with or without @)
+ * @param {number} maxRetries Maximum retry attempts on transient block
  * @returns {Promise<{
  *   success: boolean,
  *   user?: {
@@ -46,43 +54,44 @@ export function solveWafChallenge(cs) {
  *   error?: string
  * }>}
  */
-export async function getTikTokUserVideos(username, maxRetries = 2) {
+export async function getTikTokUserVideos(username, maxRetries = 3) {
   const cleanUser = username.replace(/^@/, '').trim();
   const handle = `@${cleanUser}`;
   const path = `/embed/${handle}`;
   const targetUrl = `https://www.tiktok.com${path}`;
 
-  const headers = {
-    'User-Agent':
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-    'Accept':
-      'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
-    'Referer': 'https://www.google.com/',
-    'Sec-Fetch-Dest': 'document',
-    'Sec-Fetch-Mode': 'navigate',
-    'Sec-Fetch-Site': 'cross-site'
-  };
-
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const ua = USER_AGENTS[(attempt + Math.floor(Math.random() * USER_AGENTS.length)) % USER_AGENTS.length];
+    const headers = {
+      'User-Agent': ua,
+      'Accept':
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
+      'Referer': `https://www.tiktok.com/@${cleanUser}`,
+      'Sec-Fetch-Dest': 'iframe',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'cross-site'
+    };
+
     try {
       if (attempt > 0) {
-        // Wait 1.5s before retry
-        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+        // Exponential backoff with random jitter to clear TikTok overload-protect
+        const backoffMs = 2000 * attempt + Math.floor(Math.random() * 1500);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
 
       let res = await fetch(targetUrl, { 
         headers, 
-        signal: AbortSignal.timeout(8000) 
+        signal: AbortSignal.timeout(9000) 
       });
       let html = await res.text();
 
-      if (res.status === 503 || html.includes('overload-protect')) {
+      // Check if TikTok Envoy overload protect or 429 was triggered
+      if (res.status === 503 || res.status === 429 || html.includes('overload-protect')) {
         if (attempt < maxRetries) continue;
         return {
           success: false,
-          error: `TikTok overload-protect triggered for @${cleanUser}. (Status: 503)`
+          error: `TikTok overload-protect / rate limit triggered for @${cleanUser}. (Status: ${res.status})`
         };
       }
 
@@ -96,7 +105,7 @@ export async function getTikTokUserVideos(username, maxRetries = 2) {
               ...headers,
               'Cookie': `_wafchallengeid=${solvedCookie};`
             },
-            signal: AbortSignal.timeout(8000)
+            signal: AbortSignal.timeout(9000)
           });
           html = await res.text();
         }

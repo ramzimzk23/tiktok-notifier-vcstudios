@@ -9,7 +9,9 @@ import {
   saveAccountCacheToDb,
   seedSentVideosFromCache,
   hasVideoBeenSent,
-  markVideoAsSent
+  markVideoAsSent,
+  loadSentCompletedGroups,
+  markGroupCompletedToday
 } from './db.js';
 import {
   sendDiscordNotification,
@@ -35,8 +37,39 @@ const dailyAlertsTracker = {
 
 let isPolling = false;
 let nextPollTimer = null;
-const BATCH_CONCURRENCY = 4; // Concurrently scan 4 accounts at a time for high speed & safe pacing
+const BATCH_CONCURRENCY = 1; // Serial scanning (1 by 1) with safe pacing to 100% eliminate TikTok 503 overload-protect
 const lastAccountScanTimes = new Map(); // Tracks last scan timestamp per account to throttle redundant checks
+
+export function getWIBTime(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+  const curHourWIB = Number(parts.find((p) => p.type === 'hour')?.value || 0) % 24;
+  const curMinuteWIB = Number(parts.find((p) => p.type === 'minute')?.value || 0);
+  const curSecondWIB = Number(parts.find((p) => p.type === 'second')?.value || 0);
+  const totalMinutesWIB = curHourWIB * 60 + curMinuteWIB;
+  const dateWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(date);
+  return { curHourWIB, curMinuteWIB, curSecondWIB, totalMinutesWIB, dateWIB };
+}
+
+function resetDailyTrackerIfNewDay(dateWIB) {
+  if (dailyAlertsTracker.currentDate !== dateWIB) {
+    dailyAlertsTracker.currentDate = dateWIB;
+    dailyAlertsTracker.doubleUploads.clear();
+    dailyAlertsTracker.incompleteWarnings.clear();
+    dailyAlertsTracker.reminders10Min.clear();
+    dailyAlertsTracker.deadlineWarnings.clear();
+    dailyAlertsTracker.completedAlerts.clear();
+    dailyAlertsTracker.morningGreetings.clear();
+    dailyAlertsTracker.noonCheckIns.clear();
+    runtimeState.lastPeriodicWarningTimestamps?.clear();
+    lastAccountScanTimes.clear();
+  }
+}
 
 export async function runPoll(isManual = false) {
   if (isPolling) {
@@ -44,8 +77,45 @@ export async function runPoll(isManual = false) {
     return;
   }
 
+  const now = new Date();
+  const { curHourWIB, curMinuteWIB, totalMinutesWIB, dateWIB } = getWIBTime(now);
+  resetDailyTrackerIfNewDay(dateWIB);
+
+  // Jadwal istirahat scanning TikTok: 01:00 WIB s/d 09:00 WIB (totalMinutes 60 s/d 539)
+  const isSleepWindow = totalMinutesWIB >= 60 && totalMinutesWIB < 540;
+
+  if (isSleepWindow && !isManual) {
+    if (nextPollTimer) {
+      clearTimeout(nextPollTimer);
+      nextPollTimer = null;
+    }
+    runtimeState.isSleeping = true;
+    runtimeState.isScanning = false;
+    runtimeState.scanProgress.status = 'idle';
+    runtimeState.scanProgress.currentAccount = '';
+
+    const targetWakeup = new Date(`${dateWIB}T09:00:00+07:00`).getTime();
+    const delayMs = Math.max(1000, targetWakeup - Date.now());
+    runtimeState.nextPollTime = targetWakeup;
+
+    const remainingHours = Math.floor(delayMs / 3600000);
+    const remainingMinutes = Math.floor((delayMs % 3600000) / 60000);
+
+    addLog(
+      `🌙 Bot dalam jadwal istirahat (01:00 - 09:00 WIB). Scanning TikTok otomatis dihentikan dan akan aktif kembali pada pukul 09:00 WIB (${remainingHours} jam ${remainingMinutes} menit lagi).`,
+      'info'
+    );
+
+    nextPollTimer = setTimeout(() => {
+      runPoll(false);
+    }, delayMs);
+
+    return;
+  }
+
   isPolling = true;
   runtimeState.isScanning = true;
+  runtimeState.isSleeping = false;
   if (nextPollTimer) {
     clearTimeout(nextPollTimer);
     nextPollTimer = null;
@@ -58,45 +128,22 @@ export async function runPoll(isManual = false) {
     const delayBetweenBatchesMs = Math.max(800, config.delayBetweenAccountsMs || 1200);
     const groups = config.groups || [];
 
-    // Time-of-Day Adaptive Scheduling in WIB
-    const now = new Date();
-    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
-    if (dailyAlertsTracker.currentDate !== nowWIB) {
-      dailyAlertsTracker.currentDate = nowWIB;
-      dailyAlertsTracker.doubleUploads.clear();
-      dailyAlertsTracker.incompleteWarnings.clear();
-      dailyAlertsTracker.reminders10Min.clear();
-      dailyAlertsTracker.deadlineWarnings.clear();
-      dailyAlertsTracker.completedAlerts.clear();
-      dailyAlertsTracker.morningGreetings.clear();
-      dailyAlertsTracker.noonCheckIns.clear();
-      runtimeState.lastPeriodicWarningTimestamps?.clear();
-      lastAccountScanTimes.clear();
-    }
-    const startOfDayWIB = Math.floor(new Date(`${nowWIB}T00:00:00+07:00`).getTime() / 1000);
+    const startOfDayWIB = Math.floor(new Date(`${dateWIB}T00:00:00+07:00`).getTime() / 1000);
     const endOfDayWIB = startOfDayWIB + 86400;
 
-    const nowParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jakarta',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false
-    }).formatToParts(now);
-    const curHourWIB = Number(nowParts.find((p) => p.type === 'hour')?.value || 0);
-    const curMinuteWIB = Number(nowParts.find((p) => p.type === 'minute')?.value || 0);
-    const totalMinutesWIB = curHourWIB * 60 + curMinuteWIB;
-
-    // Active clipper working hours: 09:30 WIB to 22:15 WIB
-    const isActiveWorkHours = totalMinutesWIB >= 570 && totalMinutesWIB < 1335;
+    // Jam kerja aktif clipper: 09:00 WIB s/d 22:15 WIB
+    const isActiveWorkHours = totalMinutesWIB >= 540 && totalMinutesWIB < 1335;
     const isWindDownHours = totalMinutesWIB >= 1335 && totalMinutesWIB < 1380; // 22:15 - 23:00 WIB
 
     if (isActiveWorkHours) {
-      // 8 minutes cycle during active work hours ensures prompt notifications while saving 75% bandwidth
+      // Siklus reguler saat jam kerja aktif (09:00 - 22:15 WIB): minimal 6 menit, default 8 menit
       intervalSeconds = Math.max(360, config.checkIntervalSeconds ? Math.max(360, config.checkIntervalSeconds) : 480);
     } else if (isWindDownHours) {
-      intervalSeconds = 600; // 10 minutes
+      // Siklus relaksasi malam: 10 menit
+      intervalSeconds = 600;
     } else {
-      intervalSeconds = 1800; // 30 minutes during night sleep hours (23:00 - 09:30 WIB)
+      // Siklus larut malam menjelang jam 1 istirahat (23:00 - 01:00 WIB): 15 menit
+      intervalSeconds = 900;
     }
 
     // Pre-determine which groups have already completed their 14-video quota today
@@ -135,30 +182,29 @@ export async function runPoll(isManual = false) {
         const lastScan = lastAccountScanTimes.get(cleanUser) || 0;
         const timeSinceLastScan = Date.now() - lastScan;
 
+        const c = runtimeState.accountCache[cleanUser];
+        const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
+        const hasUploadedToday = cv.some(
+          (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
+        );
+
         let shouldScan = false;
         if (isManual) {
           shouldScan = true;
         } else if (!isActiveWorkHours) {
           // Night sleep hours: check each account once every 45 mins
           shouldScan = timeSinceLastScan >= 45 * 60 * 1000;
+        } else if (hasUploadedToday) {
+          // Already uploaded today: check once every 45-60 mins for double uploads
+          const waitTime = isGroupDone ? 60 * 60 * 1000 : 45 * 60 * 1000;
+          shouldScan = timeSinceLastScan >= waitTime;
         } else if (isGroupDone) {
-          // Target 14 done: check once every 60 mins
-          shouldScan = timeSinceLastScan >= 60 * 60 * 1000;
+          // Target 14 done, BUT this clipper has NOT uploaded today yet:
+          // Check every 20 mins so later uploads are promptly captured!
+          shouldScan = timeSinceLastScan >= 20 * 60 * 1000;
         } else {
-          // Active work hours: check if account already uploaded today
-          const c = runtimeState.accountCache[cleanUser];
-          const cv = c?.recentVideos || (c?.latestVideo ? [c.latestVideo] : []);
-          const hasUploadedToday = cv.some(
-            (v) => v && v.createTime && v.createTime >= startOfDayWIB && v.createTime < endOfDayWIB
-          );
-
-          if (hasUploadedToday) {
-            // Already uploaded today: check once every 45 mins for double uploads
-            shouldScan = timeSinceLastScan >= 45 * 60 * 1000;
-          } else {
-            // High priority: clipper has NOT uploaded today, scan every cycle!
-            shouldScan = true;
-          }
+          // High priority: Active hours & clipper has NOT uploaded today -> scan every cycle!
+          shouldScan = true;
         }
 
         if (shouldScan) {
@@ -347,11 +393,31 @@ export async function runPoll(isManual = false) {
     runtimeState.scanProgress.status = 'idle';
     runtimeState.scanProgress.currentAccount = '';
 
-    // Schedule next poll cleanly AFTER the current one completes
-    runtimeState.nextPollTime = Date.now() + intervalSeconds * 1000;
+    // Hitung jadwal poll berikutnya
+    const candidateNextTime = Date.now() + intervalSeconds * 1000;
+    const nextWIB = getWIBTime(new Date(candidateNextTime));
+
+    let delayMs = intervalSeconds * 1000;
+    let nextScheduledTime = candidateNextTime;
+
+    // Jika waktu siklus berikutnya masuk dalam jam istirahat (01:00 - 09:00 WIB)
+    if (nextWIB.totalMinutesWIB >= 60 && nextWIB.totalMinutesWIB < 540) {
+      const target9AM = new Date(`${nextWIB.dateWIB}T09:00:00+07:00`).getTime();
+      delayMs = Math.max(1000, target9AM - Date.now());
+      nextScheduledTime = target9AM;
+      runtimeState.isSleeping = true;
+
+      const remH = Math.floor(delayMs / 3600000);
+      const remM = Math.floor((delayMs % 3600000) / 60000);
+      addLog(`🌙 Siklus berikutnya memasuki jam istirahat (01:00 - 09:00 WIB). Scanning TikTok otomatis dihentikan dan akan aktif kembali pada pukul 09:00 WIB (${remH} jam ${remM} menit lagi).`, 'info');
+    } else {
+      runtimeState.isSleeping = false;
+    }
+
+    runtimeState.nextPollTime = nextScheduledTime;
     nextPollTimer = setTimeout(() => {
       runPoll(false);
-    }, intervalSeconds * 1000);
+    }, delayMs);
   }
 }
 
@@ -417,28 +483,8 @@ export async function checkTaskDeadlinesAndReminders(isManual = false) {
     if (groups.length === 0) return;
 
     const now = new Date();
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jakarta',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: false
-    }).formatToParts(now);
-    const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
-    const minute = Number(parts.find((p) => p.type === 'minute')?.value || 0);
-    const currentMinutes = hour * 60 + minute;
-
-    const nowWIB = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
-    if (dailyAlertsTracker.currentDate !== nowWIB) {
-      dailyAlertsTracker.currentDate = nowWIB;
-      dailyAlertsTracker.doubleUploads.clear();
-      dailyAlertsTracker.incompleteWarnings.clear();
-      dailyAlertsTracker.reminders10Min.clear();
-      dailyAlertsTracker.deadlineWarnings.clear();
-      dailyAlertsTracker.completedAlerts.clear();
-      dailyAlertsTracker.morningGreetings.clear();
-      dailyAlertsTracker.noonCheckIns.clear();
-      runtimeState.lastPeriodicWarningTimestamps?.clear();
-    }
+    const { curHourWIB: hour, curMinuteWIB: minute, totalMinutesWIB: currentMinutes, dateWIB: nowWIB } = getWIBTime(now);
+    resetDailyTrackerIfNewDay(nowWIB);
 
     // 0. Periksa penyelesaian target secara instan untuk semua grup
     await checkCompletedGroupsInstant(groups);

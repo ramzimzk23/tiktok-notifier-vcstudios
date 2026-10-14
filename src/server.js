@@ -38,6 +38,7 @@ const PUBLIC_DIR = path.resolve(__dirname, '../public');
 export const runtimeState = {
   isRunning: true,
   isScanning: false,
+  isSleeping: false,
   scanProgress: {
     current: 0,
     total: 0,
@@ -494,6 +495,7 @@ export function createWebServer(port = 3000, triggerPollCallback = null) {
           runtime: {
             isRunning: runtimeState.isRunning,
             isScanning: runtimeState.isScanning,
+            isSleeping: !!runtimeState.isSleeping,
             scanProgress: runtimeState.scanProgress,
             lastPollTime: runtimeState.lastPollTime,
             nextPollTime: runtimeState.nextPollTime,
